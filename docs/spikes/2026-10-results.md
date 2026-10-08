@@ -1,0 +1,11 @@
+# Spike results 2026-10
+
+Run 2026-10-08 in a Claude Code Desktop session (CLI 2.1.292) through a throwaway mod that registered a model-callable `probe` tool.
+
+| # | คำถาม | ผล | หลักฐาน | ผลต่อ design |
+|---|---|---|---|---|
+| S1 | ส่ง prompt ให้ session ตัวเองทำต่อได้ไหม | no | `$.session.send({ to: { sessionId: <own id> } })` → `isDelivered: false`, "no live session on this machine has id …"; ListAgents also says a message to this session "would be a message to yourself" | ปุ่ม "ให้ Claude แก้ต่อ" ของ Proof Gate ใช้ `$.prompt.fill` ใส่ข้อความลงช่องพิมพ์ ผู้ใช้กด Enter เอง (`prompt.fill` → done) |
+| S2 | เห็นสถานะ session อื่นไหม | partial | `$.tool.call({ tool: 'ListAgents' })` คืนรายชื่อ peer sessions พร้อม `interactive · idle` / `Remote Control · offline` และชื่อ session; `$.agent.list()` คืน `[]` (subagents ของ session นี้เท่านั้น) | Mission Control แสดง session อื่นได้ (ชื่อ, interactive/remote, idle/offline) แต่บอกไม่ได้ว่า session ไหน "รอคำตอบ" — กล่อง "รอคุณ" ใช้ PR/CI + สิ่งที่ forge/proof รอยืนยันใน session นี้ |
+| S3 | เห็น fault ของ hook (รวมของ plugin อื่น) ไหม | no | hook `tool.call` ที่ throw (ไม่มี `.catch`) ถูกข้าม คำสั่งยังรัน (`echo s3-boom` → `s3-boom`) และ `ui.fault` hook ไม่ได้รับอะไรเลย (`faults seen: 0`) | Mod Manager แสดงเฉพาะ error ที่แต่ละ plugin ของชุดนี้บันทึกเอง (ใน `.catch` ของตัวเอง) + ชี้ไป `claude --debug` สำหรับที่เหลือ; ยืนยันด้วยว่า hook ที่ไม่มี `.catch` fail open |
+| S4 | latency ของ classify | 1021 / 1492 / 2074 ms (median ~1.5 s, max 2.1 s) | `$.model.classify(text, ['correction','task'])` 3 ตัวอย่าง จัดถูกทั้ง 3 (correction, task, correction) | เกินเพดาน 1.5 s → Lesson Forge ไม่ classify ขวาง `prompt.submit`; ทำหลังส่ง prompt (ไม่ await) แล้วแสดงการ์ดกฎตอน `turn.complete` |
+| S5 | rewrite-visible | pending | rewrite ทำงาน (`echo spike-s5` → `spike-s5-REWRITTEN`) แต่ session อยู่โหมด bypass จึงยังไม่เห็นหน้าขออนุญาต | `rewriteAsDeny` คง default false จนกว่าจะทดสอบในโหมดที่ขออนุญาต |
