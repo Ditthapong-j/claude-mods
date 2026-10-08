@@ -5,6 +5,7 @@ import { BUILTIN_RULES } from './builtin'
 import { CHECK_NAMES, validateCheckParams } from './checks/index'
 import { isVerdict } from './checks/types'
 import type { Probe, ProbeResult } from './checks/types'
+import { handleGuardsCommand } from './commands'
 import { GUARDS_FILE, parseGuardsText } from './config'
 import { mergeRules, newOutcome, record, startRule } from './engine'
 import type { HitRecord } from '../types'
@@ -71,6 +72,22 @@ export const register: Register = (on, options) => {
 			description: 'ดูกฎที่ทำงานอยู่และสิ่งที่ถูกดัก หรือยกเว้นกฎครั้งเดียว (/guards allow <id>)',
 		})
 		return next(e)
+	})
+
+	on('command.run', { command: 'guards' }, async ($, e) => {
+		const repo = await loadRepo($)
+		const action = handleGuardsCommand({
+			args: e.args,
+			// origin ที่ไม่รู้จัก (หรือไม่มี) นับว่าไม่ใช่ผู้ใช้ จึงยกเว้นกฎไม่ได้
+			originKind: (e.origin as { kind?: string } | undefined)?.kind ?? 'unknown',
+			rules: mergeRules(repo.rules, BUILTIN_RULES),
+			hits: await read($, hitsAtom),
+			errors: repo.errors,
+			root: repo.root,
+		})
+		const allow = action.allow
+		if (allow !== undefined) await update($, allowOnceAtom, (list) => [...list, allow])
+		return { text: action.text }
 	})
 
 	on('tool.call', async ($, e, next) => {
