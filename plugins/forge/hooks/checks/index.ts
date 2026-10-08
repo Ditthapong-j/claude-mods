@@ -1,6 +1,13 @@
+import { prHeadRename } from './pr-head-rename'
+import { secret } from './secret'
 import type { Check } from './types'
+import { vitestConcurrent } from './vitest-concurrent'
 
-export const CHECKS: Readonly<Record<string, Check>> = {}
+export const CHECKS: Readonly<Record<string, Check>> = {
+	secret,
+	'vitest-concurrent': vitestConcurrent,
+	'pr-head-rename': prHeadRename,
+}
 
 export const CHECK_NAMES: ReadonlySet<string> = new Set(Object.keys(CHECKS))
 
