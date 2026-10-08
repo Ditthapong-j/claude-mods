@@ -24,4 +24,36 @@ git config core.hooksPath .githooks
 
 ## Plugins
 
-- `forge` — บังคับกฎของ repo (`.claude/guards.json`) และกฎในตัว ก่อนคำสั่งจะรัน · `/guards`
+| plugin | ทำอะไร | คำสั่ง |
+|---|---|---|
+| `forge` | ดักคำสั่งก่อนรันตามกฎของ repo (`.claude/guards.json`), กฎส่วนตัว และกฎในตัว · เรียนรู้กฎใหม่เมื่อคุณแก้ Claude | `/guards`, `/guards allow <id>`, `/lessons`, `/lessons import-memory [dir]` |
+| `proof` | รันคำสั่งพิสูจน์ (tsc, vitest, หรือที่ตั้งใน `guards.json` → `proof`) เบื้องหลังหลังแก้ไฟล์ และเตือนเมื่อปิดงานทั้งที่ยังแดง | `/proof`, `/proof run`, `/proof on|off`, `/proof continue` |
+| `mission` | รวม worktree, PR + CI, session อื่น และ version ของแต่ละ env ไว้จอเดียว (ตั้ง `envs` ในเมนู config) | `/mission`, `/mission refresh` |
+| `manager` | ดู plugin ที่ติดตั้ง, กฎของ forge และสถานะ proof | `/mods`, `/mods text` |
+| `autopilot` | เดินงานจาก issue ถึง PR ทีละขั้น หยุดรอคุณที่จุดอนุมัติ | `/ship <issue>`, `/ship status`, `/ship approve`, `/ship stop` |
+
+ติดตั้งแต่ละตัว:
+
+```bash
+claude plugin install <plugin>@claude-mods --scope user
+```
+
+## ตัวอย่าง `.claude/guards.json`
+
+```json
+{
+	"vars": { "baseBranch": "origin/main" },
+	"proof": { "apps/web/**": "npx tsc -p apps/web/tsconfig.json --noEmit" },
+	"rules": [
+		{
+			"id": "prod-ref-main",
+			"tool": "Bash",
+			"match": "deploy-environment=PROD",
+			"unless": "--ref[ =]main\\b",
+			"action": "deny",
+			"why": "PROD ต้องรันจาก main",
+			"examples": { "hit": ["gh workflow run api.yaml --ref develop -f deploy-environment=PROD"], "miss": ["gh workflow run api.yaml --ref main -f deploy-environment=PROD"] }
+		}
+	]
+}
+```
