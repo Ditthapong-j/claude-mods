@@ -176,7 +176,12 @@ export const register: Register = (on, options) => {
 				{text}
 			</Text>
 		)
-		const rule = (w: number) => <Text dimColor>{'─'.repeat(inner(w))}</Text>
+		// เส้นคั่นยาวเกินแล้วให้ตัดทิ้ง (truncate) ไม่ขึ้นบรรทัดใหม่: ความกว้างจริงต่อเซลล์ต่างกันตาม surface และฟอนต์
+		const rule = (_w: number) => (
+			<Text dimColor wrap="truncate-end">
+				{'─'.repeat(400)}
+			</Text>
+		)
 		// ตาราง: หัวคอลัมน์สีจาง + เส้นคั่นทุกแถว; ความกว้างคอลัมน์เป็นสัดส่วนของการ์ด
 		const table = (w: number, ratios: number[], head: string[], rows: { key: string; cells: Cell[] }[]) => {
 			const cols = ratios.map((r) => Math.max(4, Math.floor(inner(w) * r)))
