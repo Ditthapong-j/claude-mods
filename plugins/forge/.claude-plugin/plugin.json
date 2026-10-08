@@ -4,5 +4,14 @@
 	"description": "บังคับกฎของ repo และบทเรียนที่เคยพลาด ก่อนคำสั่งจะรัน",
 	"author": {
 		"name": "Ditthapong-j"
+	},
+	"types": "./types/index.d.ts",
+	"userConfig": {
+		"rewriteAsDeny": {
+			"type": "boolean",
+			"title": "แก้คำสั่งแทนการบล็อก",
+			"description": "เปิด = กฎ rewrite จะบล็อกและบอกคำสั่งที่ถูกแทนการแก้ให้เอง",
+			"default": false
+		}
 	}
 }

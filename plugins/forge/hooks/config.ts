@@ -1,5 +1,3 @@
-import type { EngineInterface } from 'claude-code'
-
 import { validateRule } from './safety'
 import type { Action, RepoConfig, Rule } from './types'
 
@@ -103,48 +101,19 @@ export function parseGuards(
 	return { root, vars, rules, errors }
 }
 
-const rootByCwd = new Map<string, string | null>()
-
-async function repoRoot($: EngineInterface): Promise<string | null> {
-	const cwd = await $.session.cwd()
-	const cached = rootByCwd.get(cwd)
-	if (cached !== undefined) return cached
-	const res = await $.process.run(['git', 'rev-parse', '--show-toplevel'], {
-		cwd,
-	})
-	const root = res.exitCode === 0 ? res.stdout.trim() : null
-	rootByCwd.set(cwd, root)
-	return root
-}
-
-export async function loadRepoConfig(
-	$: EngineInterface,
+export function parseGuardsText(
+	text: string | null,
+	root: string,
 	knownChecks: ReadonlySet<string>,
 	validateParams: ParamsValidator
-): Promise<RepoConfig> {
-	const root = await repoRoot($)
-	if (root === null) return { root: null, vars: {}, rules: [], errors: [] }
-	const path = `${root}/${GUARDS_FILE}`
-	if (!(await $.fs.exists(path))) return { root, vars: { repoRoot: root }, rules: [], errors: [] }
-	const text = await $.fs.read(path)
-	if (typeof text !== 'string')
-		return {
-			root,
-			vars: { repoRoot: root },
-			rules: [],
-			errors: [`${GUARDS_FILE} ไม่ใช่ไฟล์ข้อความ`],
-		}
+): RepoConfig {
+	if (text === null) return { root, vars: { repoRoot: root }, rules: [], errors: [`${GUARDS_FILE} ไม่ใช่ไฟล์ข้อความ`] }
 	let raw: unknown
 	try {
 		raw = JSON.parse(text)
 	} catch (err) {
 		const reason = err instanceof Error ? err.message : String(err)
-		return {
-			root,
-			vars: { repoRoot: root },
-			rules: [],
-			errors: [`${GUARDS_FILE} ไม่ใช่ JSON ที่ถูกต้อง: ${reason}`],
-		}
+		return { root, vars: { repoRoot: root }, rules: [], errors: [`${GUARDS_FILE} ไม่ใช่ JSON ที่ถูกต้อง: ${reason}`] }
 	}
 	return parseGuards(raw, root, knownChecks, validateParams)
 }
