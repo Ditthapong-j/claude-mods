@@ -5,9 +5,18 @@ export type Pr = {
 	branch: string
 	checks: 'pass' | 'fail' | 'pending' | 'none'
 	review: 'approved' | 'changes' | 'pending'
+	checksPass: number
+	checksTotal: number
+	updatedAt: number | null
 }
 export type Peer = { name: string; id: string; kind: 'interactive' | 'remote'; state: string }
-export type EnvRow = { name: string; version: string | null; commit: string | null; problem: string | null }
+export type EnvRow = {
+	name: string
+	service: string | null
+	version: string | null
+	commit: string | null
+	problem: string | null
+}
 
 export function parseWorktrees(porcelain: string): Worktree[] {
 	return porcelain
@@ -43,6 +52,13 @@ function rollup(checks: unknown): Pr['checks'] {
 	return 'pass'
 }
 
+function checkCounts(checks: unknown): { pass: number; total: number } {
+	if (!Array.isArray(checks)) return { pass: 0, total: 0 }
+	const list = checks as Record<string, unknown>[]
+	const pass = list.filter((c) => ['SUCCESS', 'NEUTRAL', 'SKIPPED'].includes(String(c['conclusion'] ?? c['state'] ?? ''))).length
+	return { pass, total: list.length }
+}
+
 export function parsePrs(json: string): Pr[] | { error: string } {
 	let raw: unknown
 	try {
@@ -51,18 +67,21 @@ export function parsePrs(json: string): Pr[] | { error: string } {
 		return { error: `อ่านผล gh ไม่ได้: ${err instanceof Error ? err.message : String(err)}` }
 	}
 	if (!Array.isArray(raw)) return { error: 'ผล gh ไม่ใช่ array' }
-	return (raw as Record<string, unknown>[]).map((p) => ({
-		number: Number(p['number']),
-		title: String(p['title'] ?? ''),
-		branch: String(p['headRefName'] ?? ''),
-		checks: rollup(p['statusCheckRollup']),
-		review:
-			p['reviewDecision'] === 'APPROVED'
-				? 'approved'
-				: p['reviewDecision'] === 'CHANGES_REQUESTED'
-					? 'changes'
-					: 'pending',
-	}))
+	return (raw as Record<string, unknown>[]).map((p) => {
+		const counts = checkCounts(p['statusCheckRollup'])
+		const updated = typeof p['updatedAt'] === 'string' ? Date.parse(p['updatedAt']) : Number.NaN
+		const decision = p['reviewDecision']
+		return {
+			number: Number(p['number']),
+			title: String(p['title'] ?? ''),
+			branch: String(p['headRefName'] ?? ''),
+			checks: rollup(p['statusCheckRollup']),
+			review: decision === 'APPROVED' ? 'approved' : decision === 'CHANGES_REQUESTED' ? 'changes' : 'pending',
+			checksPass: counts.pass,
+			checksTotal: counts.total,
+			updatedAt: Number.isNaN(updated) ? null : updated,
+		}
+	})
 }
 
 const PEER = /^\s+(.+?) \[([0-9a-f]+)\]\s+·\s+(interactive|Remote Control)\s+·\s+(\w+)/
@@ -84,24 +103,25 @@ export function parsePeers(text: string): Peer[] {
 
 export function parseVersion(
 	name: string,
-	res: { ok: boolean; status: number; text: string } | { error: string }
+	res: { ok: boolean; status: number; text: string } | { error: string },
+	service: string | null = null
 ): EnvRow {
-	if ('error' in res) return { name, version: null, commit: null, problem: res.error }
-	if (!res.ok) return { name, version: null, commit: null, problem: `HTTP ${res.status}` }
+	if ('error' in res) return { name, service, version: null, commit: null, problem: res.error }
+	if (!res.ok) return { name, service, version: null, commit: null, problem: `HTTP ${res.status}` }
 	let body: Record<string, unknown> = {}
 	try {
 		const raw: unknown = JSON.parse(res.text)
 		if (typeof raw === 'object' && raw !== null) body = raw as Record<string, unknown>
 	} catch {
-		return { name, version: null, commit: null, problem: 'ไม่ใช่ JSON' }
+		return { name, service, version: null, commit: null, problem: 'ไม่ใช่ JSON' }
 	}
 	const version = typeof body['version'] === 'string' ? body['version'] : null
 	const commit = typeof body['commit'] === 'string' ? body['commit'].slice(0, 7) : null
 	const noIdentity = version === '0.0.0-dev' || body['commit'] === 'unknown'
-	return { name, version, commit, problem: noIdentity ? 'build args ไม่ถึง Dockerfile (0.0.0-dev / unknown)' : null }
+	return { name, service, version, commit, problem: noIdentity ? 'build args ไม่ถึง Dockerfile (0.0.0-dev / unknown)' : null }
 }
 
-export function parseEnvConfig(text: string): { name: string; url: string }[] | { error: string } {
+export function parseEnvConfig(text: string): { name: string; url: string; service: string | null }[] | { error: string } {
 	try {
 		const raw: unknown = JSON.parse(text)
 		if (!Array.isArray(raw)) return { error: 'envs ต้องเป็น array' }
@@ -109,7 +129,11 @@ export function parseEnvConfig(text: string): { name: string; url: string }[] | 
 			.filter(
 				(e) => typeof e['name'] === 'string' && typeof e['url'] === 'string' && String(e['url']).startsWith('https://')
 			)
-			.map((e) => ({ name: String(e['name']), url: String(e['url']) }))
+			.map((e) => ({
+				name: String(e['name']),
+				url: String(e['url']),
+				service: typeof e['service'] === 'string' ? e['service'] : null,
+			}))
 	} catch (err) {
 		return { error: `envs ไม่ใช่ JSON: ${err instanceof Error ? err.message : String(err)}` }
 	}

@@ -54,6 +54,7 @@ describe('parse', () => {
 	test('env version rows flag a build without identity', () => {
 		expect(parseVersion('DEV', { ok: true, status: 200, text: '{"version":"1.5.1","commit":"abc1234def"}' })).toEqual({
 			name: 'DEV',
+			service: null,
 			version: '1.5.1',
 			commit: 'abc1234',
 			problem: null,
@@ -66,13 +67,13 @@ describe('parse', () => {
 	})
 	test('env config and waiting list', () => {
 		expect(parseEnvConfig('[{"name":"PROD","url":"https://a.example/v"}]')).toEqual([
-			{ name: 'PROD', url: 'https://a.example/v' },
+			{ name: 'PROD', url: 'https://a.example/v', service: null },
 		])
 		expect('error' in parseEnvConfig('{')).toBe(true)
 		expect(
 			waiting(
-				[{ number: 2, title: 'b', branch: 'x', checks: 'fail', review: 'changes' }],
-				[{ name: 'AI', version: null, commit: null, problem: 'timeout' }]
+				[{ number: 2, title: 'b', branch: 'x', checks: 'fail', review: 'changes', checksPass: 0, checksTotal: 1, updatedAt: null }],
+				[{ name: 'AI', service: null, version: null, commit: null, problem: 'timeout' }]
 			)
 		).toEqual(['PR #2 b · CI แดง', 'PR #2 b · ขอแก้จาก review', 'AI · timeout'])
 	})

@@ -1,11 +1,14 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register } from 'claude-code'
+import type { EngineInterface, Register, RenderChildren } from 'claude-code'
 
 import type { MissionSnapshot } from '../types'
 import { parseEnvConfig, parsePeers, parsePrs, parseVersion, parseWorktrees, waiting } from './parse'
 import type { EnvRow } from './parse'
+import { envTable, layout, prRows, trunc, waitingItems, workRows } from './view'
+import type { Cell } from './view'
 
 const snapshotAtom = atom({ plugin: 'mission', key: 'snapshot' } as const, null as MissionSnapshot | null)
+const showAllAtom = atom({ plugin: 'mission', key: 'showAll' } as const, false)
 const openAtom = atom({ plugin: 'mission', key: 'open' } as const, false)
 const errorsAtom = atom(
 	{ plugin: 'mission', key: 'errors' } as const,
@@ -54,7 +57,7 @@ async function snapshot($: EngineInterface, envsText: string): Promise<MissionSn
 	}
 	const gh = await run(
 		$,
-		['gh', 'pr', 'list', '--author', '@me', '--json', 'number,title,headRefName,reviewDecision,statusCheckRollup'],
+		['gh', 'pr', 'list', '--author', '@me', '--json', 'number,title,headRefName,reviewDecision,statusCheckRollup,updatedAt'],
 		root
 	)
 	const prs = gh.ok ? parsePrs(gh.out) : { error: gh.err }
@@ -68,12 +71,13 @@ async function snapshot($: EngineInterface, envsText: string): Promise<MissionSn
 	const envList = parseEnvConfig(envsText)
 	const envs: EnvRow[] = []
 	// ตั้งค่า envs ผิด: แสดงเป็นแถวปัญหา ไม่ซ่อนกล่อง
-	if ('error' in envList) envs.push({ name: 'envs', version: null, commit: null, problem: envList.error })
-	else for (const env of envList) envs.push(parseVersion(env.name, await fetchVersion($, env.url)))
+	if ('error' in envList) envs.push({ name: 'envs', service: null, version: null, commit: null, problem: envList.error })
+	else for (const env of envList) envs.push(parseVersion(env.name, await fetchVersion($, env.url), env.service))
 	return {
 		at: await $.clock.now(),
 		worktrees,
 		worktreeError,
+		here: top.ok ? top.out.trim() : null,
 		prs,
 		peers,
 		envs,
@@ -136,10 +140,13 @@ export const register: Register = (on, options) => {
 		result: JSON.stringify({ ...((await read($, snapshotAtom)) ?? {}), errors: (await read($, errorsAtom)).slice(-5) }),
 	}))
 
+
 	on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-		const { Box, Text } = $.ui.resolve(e)
+		const { Box, Button, Text } = $.ui.resolve(e)
 		const snap = await read($, snapshotAtom)
 		const errors = await read($, errorsAtom)
+		const showAll = await read($, showAllAtom)
+		const width = Math.max(40, e.props.bodyColumns)
 		if (snap === null) {
 			return (
 				<Box flexDirection="column">
@@ -152,77 +159,158 @@ export const register: Register = (on, options) => {
 				</Box>
 			)
 		}
-		const section = (title: string) => (
+
+		const two = layout(width) === 'two'
+		const half = two ? Math.floor((width - 1) / 2) : width
+		const inner = (w: number) => Math.max(10, w - 4)
+		const limit = showAll ? 50 : 5
+		const prs = Array.isArray(snap.prs) ? snap.prs : []
+		const items = waitingItems(prs, snap.envs, snap.at)
+		const work = workRows(snap.worktrees, snap.here, limit)
+		const prView = prRows(prs, limit)
+		const env = envTable(snap.envs)
+		const online = Array.isArray(snap.peers) ? snap.peers.filter((p) => p.state !== 'offline').length : 0
+
+		const title = (text: string) => (
 			<Text bold color="claude">
-				{title}
+				{text}
 			</Text>
 		)
-		return (
-			<Box flexDirection="column" gap={1}>
-				<Box flexDirection="column">
-					{section(`รอคุณ · ${snap.waiting.length}`)}
-					{snap.waiting.length === 0 ? (
-						<Text dimColor>ไม่มี</Text>
-					) : (
-						snap.waiting.map((w) => (
-							<Text key={w} color="warning">
-								● {w}
+		const rule = (w: number) => <Text dimColor>{'─'.repeat(inner(w))}</Text>
+		// ตาราง: หัวคอลัมน์สีจาง + เส้นคั่นทุกแถว; ความกว้างคอลัมน์เป็นสัดส่วนของการ์ด
+		const table = (w: number, ratios: number[], head: string[], rows: { key: string; cells: Cell[] }[]) => {
+			const cols = ratios.map((r) => Math.max(4, Math.floor(inner(w) * r)))
+			const line = (key: string, cells: Cell[], isHead: boolean) => (
+				<Box key={key}>
+					{cells.map((c, i) => (
+						<Box key={`${key}-${i}`} width={cols[i] ?? 8}>
+							<Text dimColor={isHead} color={isHead || c.tone === 'text' ? undefined : c.tone} wrap="truncate-end">
+								{trunc(c.text, (cols[i] ?? 8) - 1)}
 							</Text>
-						))
-					)}
-				</Box>
-				<Box flexDirection="column">
-					{section('worktree')}
-					{snap.worktreeError !== null && <Text color="error">{snap.worktreeError}</Text>}
-					{snap.worktrees.map((w) => (
-						<Text key={w.path}>
-							{w.branch ?? '(detached)'} · {w.dirty < 0 ? '?' : w.dirty} ไฟล์ค้าง · <Text dimColor>{w.path}</Text>
-						</Text>
+						</Box>
 					))}
 				</Box>
+			)
+			return (
 				<Box flexDirection="column">
-					{section('PR + CI')}
-					{'error' in snap.prs ? (
-						<Text color="error">{snap.prs.error}</Text>
-					) : (
-						snap.prs.map((p) => (
-							<Text
-								key={`${p.number}`}
-								color={p.checks === 'fail' ? 'error' : p.checks === 'pass' ? 'success' : 'warning'}
-							>
-								#{p.number} {p.title} · CI {p.checks} · review {p.review}
-							</Text>
-						))
-					)}
+					{line('head', head.map((h) => ({ text: h, tone: 'text' as const })), true)}
+					{rule(w)}
+					{rows.map((r) => (
+						<Box key={r.key} flexDirection="column">
+							{line(r.key, r.cells, false)}
+							{rule(w)}
+						</Box>
+					))}
 				</Box>
-				<Box flexDirection="column">
-					{section('session อื่น')}
-					{'error' in snap.peers ? (
-						<Text color="error">{snap.peers.error}</Text>
-					) : (
-						snap.peers
-							.filter((p) => p.state !== 'offline')
-							.map((p) => (
-								<Text key={p.id}>
-									{p.name} ·{' '}
-									<Text dimColor>
-										{p.kind} · {p.state}
-									</Text>
-								</Text>
-							))
-					)}
-				</Box>
-				{snap.envs.length > 0 && (
-					<Box flexDirection="column">
-						{section('Environments')}
-						{snap.envs.map((x) => (
-							<Text key={x.name} color={x.problem === null ? 'success' : 'error'}>
-								{x.name} · {x.version ?? '-'} · {x.commit ?? '-'}
-								{x.problem === null ? '' : ` · ${x.problem}`}
-							</Text>
-						))}
+			)
+		}
+		const card = (key: string, w: number, children: RenderChildren, accent?: 'warning' | 'error') => (
+			<Box key={key} width={w} flexDirection="column" borderStyle="round" borderColor={accent ?? 'subtle'} paddingX={1}>
+				{children}
+			</Box>
+		)
+
+		const waitingCard = card(
+			'waiting',
+			width,
+			<Box flexDirection="column">
+				{title(`รอคุณ · ${items.length}`)}
+				{items.length === 0 && <Text dimColor>ไม่มีอะไรรอคุณ</Text>}
+				{items.map((it) => (
+					<Box key={it.text} justifyContent="space-between">
+						<Text wrap="truncate-end">
+							<Text color={it.tone}>●</Text> {trunc(it.text, inner(width) - 10)}
+						</Text>
+						<Text dimColor>{it.age ?? ''}</Text>
+					</Box>
+				))}
+			</Box>,
+			items.some((i) => i.tone === 'error') ? 'error' : items.length > 0 ? 'warning' : undefined
+		)
+
+		const workCard = card(
+			'work',
+			half,
+			<Box flexDirection="column">
+				{title('กำลังทำ')}
+				{snap.worktreeError !== null && <Text color="error">{snap.worktreeError}</Text>}
+				{table(
+					half,
+					[0.3, 0.45, 0.25],
+					['worktree', 'branch', 'สถานะ'],
+					work.rows.map((r) => ({
+						key: r.name,
+						cells: [{ text: r.name, tone: 'text' }, { text: r.branch, tone: 'text' }, r.status],
+					}))
+				)}
+				<Text dimColor>
+					{work.clean > 0 ? `+${work.clean} ตัวที่สะอาด` : ''}
+					{work.more > 0 ? ` · อีก ${work.more} ตัวที่ค้าง` : ''}
+				</Text>
+			</Box>
+		)
+
+		const prCard = card(
+			'pr',
+			half,
+			<Box flexDirection="column">
+				{title('PR + CI')}
+				{'error' in snap.prs && <Text color="error">{snap.prs.error}</Text>}
+				{table(
+					half,
+					[0.55, 0.2, 0.25],
+					['PR', 'CI', 'review'],
+					prView.rows.map((r) => ({ key: `${r.num}`, cells: [{ text: `#${r.num} ${r.title}`, tone: 'text' }, r.ci, r.review] }))
+				)}
+				{prView.more > 0 && <Text dimColor>อีก {prView.more} ตัว</Text>}
+			</Box>
+		)
+
+		const envCard = card(
+			'env',
+			width,
+			<Box flexDirection="column">
+				{title('Environments')}
+				{env.rows.length === 0 ? (
+					<Text dimColor>ยังไม่ได้ตั้งค่า · /plugin configure mission@claude-mods → envs</Text>
+				) : (
+					table(
+						width,
+						[0.12, ...env.columns.map(() => 0.88 / env.columns.length)],
+						['env', ...env.columns],
+						env.rows.map((r) => ({ key: r.env, cells: [{ text: r.env, tone: 'text' }, ...r.cells] }))
+					)
+				)}
+			</Box>
+		)
+
+		return (
+			<Box flexDirection="column" gap={1}>
+				{waitingCard}
+				{two ? (
+					<Box gap={1}>
+						{workCard}
+						{prCard}
+					</Box>
+				) : (
+					<Box flexDirection="column" gap={1}>
+						{workCard}
+						{prCard}
 					</Box>
 				)}
+				{envCard}
+				<Box justifyContent="space-between">
+					<Text dimColor>
+						/mission · อัปเดตทุก {Math.round(refreshMs / 60_000)} นาที · session ที่เปิดอยู่ {online}
+					</Text>
+					<Box gap={1}>
+						<Button key="all" label={showAll ? 'ย่อ' : 'แสดงทั้งหมด'} plain onPress={() => update($, showAllAtom, (v) => !v)} />
+						<Button key="refresh" label="รีเฟรช" plain onPress={() => refresh($, envsText)} />
+						<Text bold color="claude">
+							รอคุณ {items.length}
+						</Text>
+					</Box>
+				</Box>
 			</Box>
 		)
 	})
