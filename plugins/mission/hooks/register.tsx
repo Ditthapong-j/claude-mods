@@ -46,6 +46,7 @@ async function snapshot($: EngineInterface, envsText: string): Promise<MissionSn
 	const top = await run($, ['git', 'rev-parse', '--show-toplevel'], cwd)
 	const root = top.ok ? top.out.trim() : cwd
 	const wt = await run($, ['git', 'worktree', 'list', '--porcelain'], root)
+	const worktreeError = wt.ok ? null : wt.err
 	const worktrees = []
 	for (const w of wt.ok ? parseWorktrees(wt.out) : []) {
 		const st = await run($, ['git', '-C', w.path, 'status', '--porcelain'])
@@ -57,19 +58,32 @@ async function snapshot($: EngineInterface, envsText: string): Promise<MissionSn
 		root
 	)
 	const prs = gh.ok ? parsePrs(gh.out) : { error: gh.err }
-	const agents = await $.tool.call({ tool: 'ListAgents' })
-	const peers =
-		agents.deny !== undefined ? { error: agents.deny } : parsePeers(String(agents.text ?? agents.result ?? ''))
+	let peers: MissionSnapshot['peers']
+	try {
+		const agents = await $.tool.call({ tool: 'ListAgents' })
+		peers = agents.deny !== undefined ? { error: agents.deny } : parsePeers(String(agents.text ?? agents.result ?? ''))
+	} catch (err) {
+		peers = { error: err instanceof Error ? err.message : String(err) }
+	}
 	const envList = parseEnvConfig(envsText)
 	const envs: EnvRow[] = []
-	if (!('error' in envList))
-		for (const env of envList) envs.push(parseVersion(env.name, await fetchVersion($, env.url)))
-	return { at: await $.clock.now(), worktrees, prs, peers, envs, waiting: waiting(Array.isArray(prs) ? prs : [], envs) }
+	// ตั้งค่า envs ผิด: แสดงเป็นแถวปัญหา ไม่ซ่อนกล่อง
+	if ('error' in envList) envs.push({ name: 'envs', version: null, commit: null, problem: envList.error })
+	else for (const env of envList) envs.push(parseVersion(env.name, await fetchVersion($, env.url)))
+	return {
+		at: await $.clock.now(),
+		worktrees,
+		worktreeError,
+		prs,
+		peers,
+		envs,
+		waiting: waiting(Array.isArray(prs) ? prs : [], envs),
+	}
 }
 
 async function refresh($: EngineInterface, envsText: string): Promise<void> {
 	try {
-		await update($, snapshotAtom, () => null)
+		// เก็บ snapshot เดิมไว้ระหว่างอัปเดต pane จะไม่กระพริบกลับไปหน้าโหลด
 		const snap = await snapshot($, envsText)
 		await update($, snapshotAtom, () => snap)
 	} catch (err) {
@@ -91,8 +105,15 @@ export const register: Register = (on, options) => {
 			description: 'Mission Control: งาน, PR + CI, session อื่น, env · refresh',
 		})
 		// timer ต้องเริ่มจาก session.start จึงจะอยู่ข้าม dispatch; อัปเดตเฉพาะตอนเปิด pane
+		// อัปเดตเฉพาะตอนที่ pane ยังเปิดอยู่จริง ปิดแล้วหยุดเรียก gh / git
 		$.clock.every(refreshMs, async () => {
-			if (await read($, openAtom)) await refresh($, envsText)
+			if (!(await read($, openAtom))) return
+			const panes = await $.ui.panes()
+			if (!panes.some((p) => p.id === PANE)) {
+				await update($, openAtom, () => false)
+				return
+			}
+			await refresh($, envsText)
 		})
 		await $.tool.register({
 			name: 'snapshot',
@@ -112,13 +133,25 @@ export const register: Register = (on, options) => {
 	})
 
 	on('tool.call', { tool: 'mcp__mission__snapshot' }, async ($) => ({
-		result: JSON.stringify(await read($, snapshotAtom)),
+		result: JSON.stringify({ ...((await read($, snapshotAtom)) ?? {}), errors: (await read($, errorsAtom)).slice(-5) }),
 	}))
 
 	on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
 		const { Box, Text } = $.ui.resolve(e)
 		const snap = await read($, snapshotAtom)
-		if (snap === null) return <Text dimColor>กำลังโหลด…</Text>
+		const errors = await read($, errorsAtom)
+		if (snap === null) {
+			return (
+				<Box flexDirection="column">
+					<Text dimColor>กำลังโหลด…</Text>
+					{errors.slice(-3).map((x) => (
+						<Text key={`${x.at}`} color="error">
+							{x.where}: {x.message}
+						</Text>
+					))}
+				</Box>
+			)
+		}
 		const section = (title: string) => (
 			<Text bold color="claude">
 				{title}
@@ -140,6 +173,7 @@ export const register: Register = (on, options) => {
 				</Box>
 				<Box flexDirection="column">
 					{section('worktree')}
+					{snap.worktreeError !== null && <Text color="error">{snap.worktreeError}</Text>}
 					{snap.worktrees.map((w) => (
 						<Text key={w.path}>
 							{w.branch ?? '(detached)'} · {w.dirty < 0 ? '?' : w.dirty} ไฟล์ค้าง · <Text dimColor>{w.path}</Text>
