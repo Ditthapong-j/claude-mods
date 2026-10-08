@@ -16,6 +16,7 @@ declare module 'claude-code' {
 			bandHidden: boolean
 			enabled: boolean
 			busy: boolean
+			lastEdit: number | null
 			errors: { at: number; where: string; message: string }[]
 		}
 	}
