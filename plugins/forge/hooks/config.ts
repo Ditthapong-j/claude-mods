@@ -19,7 +19,7 @@ function optionalString(value: unknown): string | undefined {
 	return typeof value === 'string' ? value : undefined
 }
 
-function toRule(raw: unknown, index: number): { rule?: Rule; error?: string } {
+export function toRule(raw: unknown, index: number): { rule?: Rule; error?: string } {
 	if (!isRecord(raw)) return { error: `rules[${index}] ต้องเป็น object` }
 	const id = optionalString(raw['id']) ?? `rules[${index}]`
 	const tools = typeof raw['tool'] === 'string' ? [raw['tool']] : strings(raw['tools'])
