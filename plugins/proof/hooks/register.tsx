@@ -121,6 +121,11 @@ async function runAll($: EngineInterface): Promise<void> {
 		await recordError($, 'run', err)
 	} finally {
 		await update($, busyAtom, () => false)
+		// มีไฟล์ที่แก้ระหว่างรัน: นัดรอบถัดไป
+		if ((await read($, touchedAtom)).length > 0 && (await read($, lastEditAtom)) === null) {
+			const now = await $.clock.now()
+			await update($, lastEditAtom, () => now)
+		}
 		void $.ui.status(statusLine(await read($, resultsAtom)))
 	}
 }
@@ -129,6 +134,8 @@ async function tick($: EngineInterface): Promise<void> {
 	const last = await read($, lastEditAtom)
 	if (last === null || !(await read($, enabledAtom))) return
 	if ((await $.clock.now()) - last < DEBOUNCE_MS) return
+	// กำลังรันอยู่: เก็บ lastEdit ไว้ให้ tick รอบหลังจากรันจบ
+	if (await read($, busyAtom)) return
 	await update($, lastEditAtom, () => null)
 	await runAll($)
 }
@@ -154,6 +161,11 @@ export const register: Register = (on, options) => {
 	on('session.start', async ($, e, next) => {
 		const res = await next(e)
 		await update($, enabledAtom, () => autoRun)
+		// state อยู่รอด reload แต่ finally ของรอบที่ถูกตัดอาจไม่ได้รัน: ล้าง busy และผลที่ค้าง running
+		await update($, busyAtom, () => false)
+		await update($, resultsAtom, (l) =>
+			l.map((r) => (r.status === 'running' ? { ...r, status: 'fail' as const, tail: 'ถูกขัดจังหวะ (reload หรือเริ่ม session ใหม่)' } : r))
+		)
 		// งานที่อยู่ข้าม dispatch ต้องเริ่มจาก session.start (timer ที่ตั้งใน hook อื่นจบพร้อม dispatch นั้น)
 		$.clock.every(TICK_MS, () => tick($))
 		await $.command.register({ name: 'proof', description: 'หลักฐานเทสต์: เปิด pane · run · on · off · continue' })

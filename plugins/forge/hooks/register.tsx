@@ -134,9 +134,19 @@ async function rows($: EngineInterface): Promise<{ rows: RuleRow[]; root: string
 
 // ร่างกฎหนึ่งข้อ: ตรวจ validate + กว้างเกิน; คืนข้อความปัญหาหรือ undefined
 async function checkDraft($: EngineInterface, rule: Rule, vars: Vars): Promise<string | undefined> {
+	// ร่างกฎใช้เพิ่มกฎเท่านั้น: ปิดหรือแทนที่กฎเดิมผ่านร่างไม่ได้ (ผู้ใช้ไม่เห็นว่ากำลังปิดอะไร)
+	if (!rule.enabled) return 'ร่างกฎปิดกฎไม่ได้ (enabled: false) · ปิดกฎด้วย /lessons disable <id>'
+	const existing = (await allRules($)).merged.find((r) => r.id === rule.id)
+	if (existing !== undefined) return `id "${rule.id}" ซ้ำกับกฎที่มีอยู่ ใช้ id ใหม่`
 	const problems = validateRule(rule, vars, CHECK_NAMES)
 	if (problems.length > 0) return problems.join(' · ')
 	return tooBroad(rule, await read($, historyAtom), vars)
+}
+
+// ร่างใหม่ต่อคิวหลังร่างที่อยู่บนจอ ไม่ทับ
+async function queueDraft($: EngineInterface, draft: DraftState): Promise<void> {
+	if ((await read($, draftAtom)) === null) await update($, draftAtom, () => draft)
+	else await update($, importQueueAtom, (q) => [...q, draft])
 }
 
 async function showNextDraft($: EngineInterface): Promise<void> {
@@ -211,6 +221,9 @@ async function applyLessons($: EngineInterface, action: LessonsAction): Promise<
 		if (rule === undefined) {
 			await showNextDraft($)
 			return 'ร่างกฎเสีย ทิ้งแล้ว'
+		}
+		if (action.id !== undefined && action.id !== rule.id) {
+			return `ร่างกฎเปลี่ยนไปแล้ว (ตอนนี้คือ ${rule.id}) ดูร่างใหม่แล้วกดอีกครั้ง`
 		}
 		const repo = await loadRepo($)
 		if (action.scope === 'file') {
@@ -306,7 +319,7 @@ export const register: Register = (on, options) => {
 		const problem = await checkDraft($, rule, repo.vars)
 		if (problem !== undefined) return { result: `ร่างกฎใช้ไม่ได้: ${problem}` }
 		const lesson = typeof input['lesson'] === 'string' ? input['lesson'] : 'เสนอโดย Claude'
-		await update($, draftAtom, () => ({ rule: ruleToJson(rule), lesson }))
+		await queueDraft($, { rule: ruleToJson(rule), lesson })
 		return { result: `ร่างกฎ ${rule.id} รอผู้ใช้กดยืนยันที่แถบเหนือช่องพิมพ์ (หรือผู้ใช้พิมพ์ /lessons accept ...)` }
 	})
 
@@ -412,7 +425,7 @@ export const register: Register = (on, options) => {
 				await recordError($, 'lesson-draft', `${parsed.rule.id}: ${problem}`)
 				return res
 			}
-			await update($, draftAtom, () => ({ rule: ruleToJson(parsed.rule), lesson: pending.text }))
+			await queueDraft($, { rule: ruleToJson(parsed.rule), lesson: pending.text })
 		} catch (err) {
 			await recordError($, 'turn.complete', err)
 		}
@@ -440,10 +453,10 @@ export const register: Register = (on, options) => {
 						key="any"
 						label="ใช้ทุก repo"
 						variant="primary"
-						onPress={act({ kind: 'accept', scope: 'any-repo' })}
+						onPress={act({ kind: 'accept', scope: 'any-repo', id: rule.id })}
 					/>
-					<Button key="repo" label="เฉพาะ repo นี้" onPress={act({ kind: 'accept', scope: 'repo' })} />
-					<Button key="file" label="เขียนลง guards.json" onPress={act({ kind: 'accept', scope: 'file' })} />
+					<Button key="repo" label="เฉพาะ repo นี้" onPress={act({ kind: 'accept', scope: 'repo', id: rule.id })} />
+					<Button key="file" label="เขียนลง guards.json" onPress={act({ kind: 'accept', scope: 'file', id: rule.id })} />
 					<Button
 						key="edit"
 						label="แก้ก่อน"

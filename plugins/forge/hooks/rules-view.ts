@@ -45,7 +45,8 @@ export function ruleRows(
 
 export type LessonsAction =
 	| { kind: 'open' }
-	| { kind: 'accept'; scope: 'any-repo' | 'repo' | 'file' }
+	// id: ร่างที่ผู้ใช้เห็นบนจอ (ปุ่มส่งมา) ถ้าร่างเปลี่ยนไปแล้วจะไม่ยอมรับ
+	| { kind: 'accept'; scope: 'any-repo' | 'repo' | 'file'; id?: string }
 	| { kind: 'reject' }
 	| { kind: 'set'; id: string; enabled: boolean }
 	| { kind: 'remove'; id: string }
@@ -56,7 +57,7 @@ export type LessonsAction =
 const USAGE = '/lessons · accept any-repo|repo|file · reject · enable|disable|remove <id> · import-memory [dir]'
 
 export function parseLessonsArgs(args: string, origin: { kind: string; name?: string }): LessonsAction {
-	const [verb, arg] = args.trim().split(/\s+/)
+	const [verb, arg, extra] = args.trim().split(/\s+/)
 	const person = origin.kind === 'composer'
 	const manager = origin.kind === 'plugin' && origin.name === 'manager'
 	if (verb === undefined || verb === '') return { kind: 'open' }
@@ -66,9 +67,8 @@ export function parseLessonsArgs(args: string, origin: { kind: string; name?: st
 	} as const
 	if (verb === 'accept') {
 		if (!person) return refused
-		return arg === 'any-repo' || arg === 'repo' || arg === 'file'
-			? { kind: 'accept', scope: arg }
-			: { kind: 'help', text: USAGE }
+		if (arg !== 'any-repo' && arg !== 'repo' && arg !== 'file') return { kind: 'help', text: USAGE }
+		return extra === undefined ? { kind: 'accept', scope: arg } : { kind: 'accept', scope: arg, id: extra }
 	}
 	if (verb === 'reject') return person ? { kind: 'reject' } : refused
 	if (verb === 'enable' || verb === 'disable' || verb === 'remove') {
