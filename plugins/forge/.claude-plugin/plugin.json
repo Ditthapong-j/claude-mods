@@ -1,0 +1,8 @@
+{
+	"name": "forge",
+	"version": "0.1.0",
+	"description": "บังคับกฎของ repo และบทเรียนที่เคยพลาด ก่อนคำสั่งจะรัน",
+	"author": {
+		"name": "Ditthapong-j"
+	}
+}

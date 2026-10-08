@@ -1,0 +1,14 @@
+{
+	"name": "claude-mods",
+	"owner": {
+		"name": "Ditthapong-j"
+	},
+	"plugins": [
+		{
+			"name": "forge",
+			"source": "./plugins/forge",
+			"description": "บังคับกฎของ repo และบทเรียนที่เคยพลาด ก่อนคำสั่งจะรัน"
+		}
+	],
+	"description": "ชุด mod ส่วนตัวสำหรับ Claude Code"
+}

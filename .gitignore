@@ -1,0 +1,6 @@
+.forbidden-words
+.DS_Store
+node_modules/
+plugins/*/.claude-plugin/types/
+plugins/*/tsconfig.json
+.superpowers/
