@@ -18,6 +18,11 @@
 			"name": "mission",
 			"source": "./plugins/mission",
 			"description": "Mission Control: งาน, PR, CI และ env ในจอเดียว"
+		},
+		{
+			"name": "manager",
+			"source": "./plugins/manager",
+			"description": "Mod Manager: /mods ดู plugin, กฎ และ error ในจอเดียว"
 		}
 	],
 	"description": "ชุด mod ส่วนตัวสำหรับ Claude Code"
