@@ -8,6 +8,13 @@ export type PluginRowState = {
 
 declare module 'claude-code' {
 	interface PluginState {
-		manager: { plugins: PluginRowState[] }
+		manager: {
+			plugins: PluginRowState[]
+			view: {
+				plugins: PluginRowState[]
+				rules: { rules: { id: string; source: string; enabled: boolean; hits30: number }[]; errors: string[] } | { error: string }
+				proof: string
+			} | null
+		}
 	}
 }

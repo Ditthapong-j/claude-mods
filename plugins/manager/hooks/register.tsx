@@ -5,6 +5,10 @@ import type { PluginRowState } from '../types'
 import { disableCommand, parseInstalled, parseRulesTool, pluginRow } from './view'
 
 const pluginsAtom = atom({ plugin: 'manager', key: 'plugins' } as const, [] as PluginRowState[])
+const viewAtom = atom(
+	{ plugin: 'manager', key: 'view' } as const,
+	null as { plugins: PluginRowState[]; rules: ReturnType<typeof parseRulesTool>; proof: string } | null
+)
 const PANE = 'mods'
 
 async function collect(
@@ -25,6 +29,18 @@ async function collect(
 	return { plugins, rules, proof }
 }
 
+// เก็บผลไว้ใน atom: การวาด pane อ่าน atom อย่างเดียว ไม่เรียก CLI ทุกครั้งที่วาดใหม่
+async function refreshView($: EngineInterface): Promise<NonNullable<Awaited<ReturnType<typeof collect>>>> {
+	const view = await collect($)
+	await update($, viewAtom, () => view)
+	return view
+}
+
+async function toggle($: EngineInterface, id: string, enabled: boolean): Promise<void> {
+	await $.command.run({ command: 'lessons', args: `${enabled ? 'disable' : 'enable'} ${id}` })
+	await refreshView($)
+}
+
 export const register: Register = (on) => {
 	on('plugin.register', async ($, e, next) => {
 		const res = await next(e)
@@ -40,11 +56,11 @@ export const register: Register = (on) => {
 	})
 
 	on('command.run', { command: 'mods' }, async ($, e) => {
+		const { plugins, rules, proof } = await refreshView($)
 		if (e.args.trim() !== 'text') {
 			await $.ui.open({ id: PANE, title: 'Mods' })
 			return { text: 'เปิด /mods แล้ว' }
 		}
-		const { plugins, rules, proof } = await collect($)
 		const lines = [
 			`plugins (${plugins.length}):`,
 			...plugins.map((p) => `  ${p.isSuite ? '★' : ' '} ${p.provenance} ${p.version ?? ''} · ${p.root}`),
@@ -61,7 +77,9 @@ export const register: Register = (on) => {
 
 	on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
 		const { Box, Button, Text } = $.ui.resolve(e)
-		const { plugins, rules, proof } = await collect($)
+		const view = await read($, viewAtom)
+		if (view === null) return <Text dimColor>พิมพ์ /mods เพื่อโหลดข้อมูล</Text>
+		const { plugins, rules, proof } = view
 		return (
 			<Box flexDirection="column" gap={1}>
 				<Box flexDirection="column">
@@ -103,9 +121,7 @@ export const register: Register = (on) => {
 										key={`t-${r.id}`}
 										label={r.enabled ? 'ปิด' : 'เปิด'}
 										plain
-										onPress={() =>
-											$.command.run({ command: 'lessons', args: `${r.enabled ? 'disable' : 'enable'} ${r.id}` })
-										}
+										onPress={() => toggle($, r.id, r.enabled)}
 									/>
 								)}
 							</Box>
