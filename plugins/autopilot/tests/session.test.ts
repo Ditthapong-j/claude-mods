@@ -44,14 +44,17 @@ describe('/ship', () => {
 		})
 		// ขั้นแรกเริ่มจาก slash command ซึ่ง host ไม่ให้ submit จึงอยู่ในช่องพิมพ์ให้ผู้ใช้กด Enter
 		expect(filled[0]).toContain('ขั้น 1/7')
+		await $.prompt.submit({ text: filled[0] ?? '', origin: { kind: 'composer' }, wait: false })
 		await $.turn.complete({ reason: 'answer', answer: 'ไม่มีงานซ้ำ', durationMs: 1000, isAborted: false, turnId: 't1' })
-		expect(submitted[0]).toContain('ขั้น 2/7')
+		expect(submitted.at(-1)).toContain('ขั้น 2/7')
 	})
 
 	test('a duplicate PR stops and waits for the person', async ($, on) => {
 		const submitted: string[] = []
-		world(on, { submitted, prs: '[{"number":9,"title":"fix slip"}]' })
+		const filled: string[] = []
+		world(on, { submitted, filled, prs: '[{"number":9,"title":"fix slip"}]' })
 		await $.command.run({ command: 'ship', args: '#4120 slip', origin: { kind: 'composer' }, presentation: P })
+		await $.prompt.submit({ text: filled[0] ?? '', origin: { kind: 'composer' }, wait: false })
 		await $.turn.complete({ reason: 'answer', answer: 'มี PR #9', durationMs: 1000, isAborted: false, turnId: 't1' })
 		const status = await $.command.run({
 			command: 'ship',
@@ -60,7 +63,7 @@ describe('/ship', () => {
 			presentation: P,
 		})
 		expect(status.text).toContain('รอผู้ใช้')
-		expect(submitted.length).toBe(0)
+		expect(submitted.length).toBe(1)
 	})
 
 	test('approve is refused unless the person typed it', async ($, on) => {

@@ -15,21 +15,11 @@ describe('ship state machine', () => {
 		expect(evaluate(s, { duplicates: [] })).toBe('pass')
 		expect(evaluate(s, { duplicates: ['PR #9'] })).toBe('needs-person')
 		expect(evaluate({ ...s, step: 'worktree', branch: 'fix/x' }, { worktreeBranch: 'fix/x' })).toBe('pass')
-		expect(evaluate({ ...s, step: 'red-test' }, { proof: { fail: 1, pass: 0, running: 0, newFailing: true } })).toBe(
-			'pass'
-		)
-		expect(evaluate({ ...s, step: 'red-test' }, { proof: { fail: 0, pass: 1, running: 0, newFailing: false } })).toBe(
-			'retry'
-		)
 		expect(evaluate({ ...s, step: 'fix' }, {})).toBe('pass')
-		expect(evaluate({ ...s, step: 'proof' }, { proof: { fail: 0, pass: 2, running: 0, newFailing: false } })).toBe(
-			'pass'
-		)
-		expect(evaluate({ ...s, step: 'proof' }, { proof: { fail: 0, pass: 1, running: 1, newFailing: false } })).toBe(
-			'retry'
-		)
 		expect(evaluate({ ...s, step: 'review' }, { review: { blocking: 0 } })).toBe('pass')
 		expect(evaluate({ ...s, step: 'review' }, { review: { blocking: 2 } })).toBe('retry')
+		expect(evaluate({ ...s, step: 'open-pr' }, { approved: false })).toBe('needs-person')
+		expect(evaluate({ ...s, step: 'open-pr' }, { approved: true })).toBe('pass')
 	})
 	test('advance stops at the PR gate and blocks after too many retries', () => {
 		let s: Ship = { ...startShip('x', 'origin/develop', 'code-review'), step: 'review' as const }

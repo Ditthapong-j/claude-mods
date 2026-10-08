@@ -2,9 +2,16 @@
 	"name": "autopilot",
 	"version": "0.1.0",
 	"description": "Autopilot: /ship เดินงานจาก issue ถึง PR โดยหยุดที่จุดอนุมัติ",
-	"author": { "name": "Ditthapong-j" },
+	"author": {
+		"name": "Ditthapong-j"
+	},
 	"types": "./types/index.d.ts",
 	"userConfig": {
-		"reviewer": { "type": "string", "title": "subagent ที่ใช้ review", "description": "ชื่อ subagent type เช่น code-review หรือ clean-arch-reviewer", "default": "code-review" }
+		"reviewer": {
+			"type": "string",
+			"title": "subagent ที่ใช้ review",
+			"description": "ชื่อ subagent type (ไม่ใช่ skill) เช่น general-purpose หรือ clean-arch-reviewer",
+			"default": "general-purpose"
+		}
 	}
 }

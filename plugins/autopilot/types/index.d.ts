@@ -7,10 +7,15 @@ export type ShipState = {
 	status: 'running' | 'waiting-person' | 'blocked' | 'done' | 'stopped'
 	log: string[]
 	reviewer: string
+	stepStartedAt: number
+	pushApproved: boolean
+	ours: boolean
+	reviewPhase: 'reviewing' | 'fixing' | null
+	awaitingProof: boolean
 }
 
 declare module 'claude-code' {
 	interface PluginState {
-		autopilot: { ship: ShipState | null; reviewAgent: string | null; reviewAnswer: string | null }
+		autopilot: { ship: ShipState | null; reviewAgent: string | null }
 	}
 }
