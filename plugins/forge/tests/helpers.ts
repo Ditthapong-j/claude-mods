@@ -1,5 +1,6 @@
 import type { On } from 'claude-code'
 import { mock } from 'claude-code/testing'
+import type { MockClock } from 'claude-code/testing'
 
 type RunAnswer = { exitCode: number; stdout: string; stderr?: string }
 
@@ -8,24 +9,24 @@ export type World = {
 	cwdThrows?: boolean
 	root?: string | null
 	files?: Record<string, string>
-	run?: (argv: readonly string[]) => RunAnswer | undefined
-	fetch?: (url: string) => { status: number; text: string }
+	run?: (argv: readonly string[], init?: { cwd?: string; timeoutMs?: number }) => RunAnswer | undefined
+	fetch?: (url: string) => { status: number; text: string } | 'hang'
 	toasts?: string[]
 	ran?: string[]
 }
 
 // แทน engine ใต้ plugin: git root, ไฟล์, process, http, toast และ Bash ที่ "รันจริง"
 // hook ของ test ที่ตอบการเรียก noun ของ $ ต้องตอบเป็น { value }
-export function world(on: On, w: World): void {
+export function world(on: On, w: World): MockClock {
 	const cwd = w.cwd ?? '/repo'
 	const root = w.root === undefined ? '/repo' : w.root
-	mock.clock(on)
+	const clock = mock.clock(on)
 	on('session.cwd', () => {
 		if (w.cwdThrows === true) throw new Error('boom')
 		return { value: cwd }
 	})
 	on('process.run', ($, e) => {
-		const custom = w.run?.(e.argv)
+		const custom = w.run?.(e.argv, e.init)
 		const gitRoot: RunAnswer = { exitCode: root === null ? 128 : 0, stdout: root === null ? '' : `${root}\n` }
 		const res = custom ?? (e.argv.join(' ') === 'git rev-parse --show-toplevel' ? gitRoot : ({ exitCode: 1, stdout: '' } as RunAnswer))
 		return {
@@ -46,6 +47,7 @@ export function world(on: On, w: World): void {
 	})
 	on('http.fetch', ($, e) => {
 		const res = w.fetch?.(e.url) ?? { status: 599, text: 'offline' }
+		if (res === 'hang') return new Promise<never>(() => undefined)
 		return { value: { status: res.status, ok: res.status >= 200 && res.status < 300, headers: {}, text: res.text } }
 	})
 	on('ui.toast', ($, e) => {
@@ -60,6 +62,7 @@ export function world(on: On, w: World): void {
 	on('tool.call', { tool: 'Read' }, () => ({
 		result: { type: 'text', file: { filePath: '/x', content: '', numLines: 0, startLine: 1, totalLines: 0 } },
 	}))
+	return clock
 }
 
 export function guardsAt(root: string, guards: unknown): Record<string, string> {

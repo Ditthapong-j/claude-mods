@@ -35,7 +35,10 @@ export const versionBumped: Check = {
 				{ kind: 'fetch', url: params.versionUrl },
 			],
 			next: ([file, res]) => {
-				const local = file?.kind === 'read' && file.text !== null ? file.text.trim() : ''
+				if (file?.kind !== 'read' || file.text === null) {
+					return { kind: 'deny', ruleId: rule.id, message: `อ่าน ${params.versionFile} ไม่ได้ จึงเช็กการ bump ไม่ได้ · ${allow}` }
+				}
+				const local = file.text.trim()
 				if (res?.kind === 'error') {
 					return { kind: 'deny', ruleId: rule.id, message: `ถาม version ที่รันอยู่ไม่ได้ (${res.message}) · ${allow}` }
 				}

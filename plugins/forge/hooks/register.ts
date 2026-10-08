@@ -18,6 +18,9 @@ const allowOnceAtom = atom({ plugin: 'forge', key: 'allowOnce' } as const, [] as
 const hitsAtom = atom({ plugin: 'forge', key: 'hits' } as const, [] as HitRecord[])
 const warnedAtom = atom({ plugin: 'forge', key: 'warned' } as const, [] as string[])
 
+// probe ทุกตัวต้องจบในเวลาที่กำหนด guard ต้องไม่ค้าง
+const PROBE_TIMEOUT_MS = 5000
+
 const READ_ONLY = new Set(['Read', 'Grep', 'Glob', 'LS', 'WebSearch', 'WebFetch', 'TodoWrite'])
 
 const rootByCwd = new Map<string, string | null>()
@@ -26,8 +29,14 @@ async function loadRepo($: EngineInterface): Promise<RepoConfig> {
 	const cwd = await $.session.cwd()
 	let root = rootByCwd.get(cwd)
 	if (root === undefined) {
-		const res = await $.process.run(['git', 'rev-parse', '--show-toplevel'], { cwd })
-		root = res.exitCode === 0 ? res.stdout.trim() : null
+		try {
+			const res = await $.process.run(['git', 'rev-parse', '--show-toplevel'], { cwd, timeoutMs: PROBE_TIMEOUT_MS })
+			root = res.exitCode === 0 ? res.stdout.trim() : null
+		} catch (err) {
+			// git เปิดไม่ได้: ทำงานแบบไม่อยู่ใน repo (กฎในตัวยังทำงาน) แทนที่จะบล็อกทุกคำสั่ง
+			void $.ui.toast(`forge: หา git repo ไม่ได้ (${err instanceof Error ? err.message : String(err)}) ใช้เฉพาะกฎในตัว`)
+			root = null
+		}
 		rootByCwd.set(cwd, root)
 	}
 	if (root === null) return { root: null, vars: {}, rules: [], errors: [] }
@@ -40,7 +49,7 @@ async function loadRepo($: EngineInterface): Promise<RepoConfig> {
 async function probe($: EngineInterface, p: Probe): Promise<ProbeResult> {
 	try {
 		if (p.kind === 'run') {
-			const res = await $.process.run(p.argv, p.cwd === undefined ? undefined : { cwd: p.cwd })
+			const res = await $.process.run(p.argv, { cwd: p.cwd, timeoutMs: p.timeoutMs ?? PROBE_TIMEOUT_MS })
 			return { kind: 'run', exitCode: res.exitCode, stdout: res.stdout, stderr: res.stderr }
 		}
 		if (p.kind === 'read') {
@@ -48,7 +57,9 @@ async function probe($: EngineInterface, p: Probe): Promise<ProbeResult> {
 			const text = await $.fs.read(p.path)
 			return { kind: 'read', text: typeof text === 'string' ? text : null }
 		}
-		const res = await $.http.fetch(p.url)
+		// http.fetch ไม่มี timeout ของตัวเอง จึงแข่งกับนาฬิกา
+		const res = await Promise.race([$.http.fetch(p.url), $.clock.sleep(PROBE_TIMEOUT_MS).then(() => null)])
+		if (res === null) return { kind: 'error', message: `${p.url} ไม่ตอบภายใน ${PROBE_TIMEOUT_MS / 1000} วินาที` }
 		return { kind: 'fetch', status: res.status, ok: res.ok, text: res.text }
 	} catch (err) {
 		return { kind: 'error', message: err instanceof Error ? err.message : String(err) }

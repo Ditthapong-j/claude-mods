@@ -4,7 +4,7 @@ import type { Check } from './types'
 export const vitestConcurrent: Check = {
 	start({ rule }) {
 		return {
-			probes: [{ kind: 'run', argv: ['pgrep', '-f', 'vitest'] }],
+			probes: [{ kind: 'run', argv: ['pgrep', '-f', 'node.*vitest'] }],
 			next: ([res]) => {
 				if (res?.kind !== 'run' || res.exitCode !== 0) return PASS
 				const pids = res.stdout.trim().split('\n').filter(Boolean)

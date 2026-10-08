@@ -3,6 +3,25 @@ import type { Rule, ToolInput, Vars, Verdict } from './types'
 
 export const PASS: Verdict = { kind: 'pass' }
 
+export const OPERATORS = ['&&', '||', ';', '|', '$(', '`', '>', '<'] as const
+
+function count(text: string, token: string): number {
+	return text.split(token).length - 1
+}
+
+// operator ตัวแรกที่ after มีมากกว่า before
+export function addedOperator(before: string, after: string): string | undefined {
+	return OPERATORS.find((op) => count(after, op) > count(before, op))
+}
+
+// แยกคำสั่งที่ต่อกันด้วย ; && || | & ออกเป็นท่อน
+export function splitSegments(command: string): string[] {
+	return command
+		.split(/&&|\|\||[;|&]/)
+		.map((s) => s.trim())
+		.filter((s) => s.length > 0)
+}
+
 export function interpolate(template: string, vars: Vars): string {
 	return template.replace(/\{(\w+)\}/g, (whole, key: string) => vars[key] ?? whole)
 }
@@ -26,10 +45,16 @@ export function applies(rule: Rule, tool: string, input: ToolInput, vars: Vars):
 	return rule.paths === undefined || rule.paths.some((glob) => globToRegExp(glob).test(rel))
 }
 
+function hit(rule: Rule, match: string, text: string): boolean {
+	if (!regex(match, rule.flags).test(text)) return false
+	return rule.unless === undefined || !regex(rule.unless, rule.flags).test(text)
+}
+
 export function triggers(rule: Rule, value: string): boolean {
-	if (rule.match === undefined) return true
-	if (!regex(rule.match, rule.flags).test(value)) return false
-	return rule.unless === undefined || !regex(rule.unless, rule.flags).test(value)
+	const match = rule.match
+	if (match === undefined) return true
+	if (rule.segments === true) return splitSegments(value).some((segment) => hit(rule, match, segment))
+	return hit(rule, match, value)
 }
 
 export function judge(rule: Rule, value: string, vars: Vars): Verdict {
@@ -39,6 +64,14 @@ export function judge(rule: Rule, value: string, vars: Vars): Verdict {
 	if (rule.action === 'warn') return { kind: 'warn', ruleId: rule.id, message: why }
 	const next = value.replace(regex(rule.match, rule.flags), interpolate(rule.rewrite ?? '$&', vars))
 	if (next === value) return PASS
+	const op = addedOperator(value, next)
+	if (op !== undefined) {
+		return {
+			kind: 'deny',
+			ruleId: rule.id,
+			message: `กฎ ${rule.id} พยายามเพิ่ม "${op}" ลงในคำสั่ง จึงไม่รัน · ตรวจกฎนี้ใน .claude/guards.json`,
+		}
+	}
 	return {
 		kind: 'rewrite',
 		ruleId: rule.id,

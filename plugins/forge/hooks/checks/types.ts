@@ -3,7 +3,7 @@ import type { Rule, ToolInput, Vars, Verdict } from '../types'
 // check เป็น pure: ขอข้อมูลภายนอกผ่าน probe แล้ว register.ts เป็นคนเรียก $ ให้
 // (engine ไม่ยอมให้ส่ง $ เข้าฟังก์ชันที่ import มาจากไฟล์อื่น)
 export type Probe =
-	| { kind: 'run'; argv: readonly string[]; cwd?: string }
+	| { kind: 'run'; argv: readonly string[]; cwd?: string; timeoutMs?: number }
 	| { kind: 'read'; path: string }
 	| { kind: 'fetch'; url: string }
 

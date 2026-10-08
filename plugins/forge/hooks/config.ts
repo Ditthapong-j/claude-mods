@@ -37,6 +37,7 @@ function toRule(raw: unknown, index: number): { rule?: Rule; error?: string } {
 			match: optionalString(raw['match']),
 			flags: optionalString(raw['flags']),
 			unless: optionalString(raw['unless']),
+			segments: raw['segments'] === true ? true : undefined,
 			paths: strings(raw['paths']),
 			exceptPaths: strings(raw['exceptPaths']),
 			requires: strings(raw['requires']),
@@ -73,8 +74,9 @@ export function parseGuards(
 	const vars: Record<string, string> = {}
 	if (isRecord(raw['vars'])) {
 		for (const [key, value] of Object.entries(raw['vars'])) {
-			if (typeof value === 'string') vars[key] = value
-			else errors.push(`vars.${key} ต้องเป็นข้อความ`)
+			if (typeof value !== 'string') errors.push(`vars.${key} ต้องเป็นข้อความ`)
+			else if (/[;&|$`<>\n]/.test(value)) errors.push(`vars.${key} มีอักขระ shell ที่ไม่อนุญาต`)
+			else vars[key] = value
 		}
 	}
 	vars['repoRoot'] = root

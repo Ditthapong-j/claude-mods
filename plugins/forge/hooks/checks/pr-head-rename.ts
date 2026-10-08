@@ -2,7 +2,8 @@ import { PASS } from '../match'
 import type { CheckContext, Check, ProbeResult, Step } from './types'
 
 function renameTargets(command: string): string[] {
-	const m = /git\s+branch\s+(?:-m|-M|--move)\s+(.*)$/.exec(command)
+	// ตัดที่ ; & | ไม่งั้นท่อนถัดไปจะถูกนับเป็นชื่อ branch
+	const m = /git\s+branch\s+(?:-m|-M|--move)\s+([^;&|]*)/.exec(command)
 	return (m?.[1] ?? '').split(/\s+/).filter((t) => t.length > 0 && !t.startsWith('-'))
 }
 

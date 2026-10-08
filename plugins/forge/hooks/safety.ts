@@ -1,12 +1,6 @@
 import { judge } from './match'
 import type { Rule, Vars } from './types'
 
-const OPERATORS = ['&&', '||', ';', '|', '$(', '`', '>', '<'] as const
-
-function count(text: string, token: string): number {
-	return text.split(token).length - 1
-}
-
 function compiles(source: string, flags: string | undefined): string | undefined {
 	try {
 		new RegExp(source, flags)
@@ -25,6 +19,11 @@ export function validateRule(rule: Rule, vars: Vars, knownChecks: ReadonlySet<st
 	if (rule.check !== undefined && !knownChecks.has(rule.check)) errors.push(`ไม่รู้จัก check "${rule.check}"`)
 	if (rule.check !== undefined && rule.action === 'rewrite') errors.push('กฎที่ใช้ check ใช้ action rewrite ไม่ได้')
 	if (rule.action === 'rewrite' && rule.rewrite === undefined) errors.push('action rewrite ต้องมี rewrite')
+	if (rule.action === 'rewrite' && rule.check === undefined) {
+		if (rule.examples.hit.length === 0) errors.push('rule rewrite ต้องมีตัวอย่าง hit อย่างน้อย 1 ตัว')
+		if (rule.field !== 'command') errors.push('rule rewrite แก้ได้เฉพาะ field command')
+		if (rule.segments === true) errors.push('rule rewrite ใช้ segments ไม่ได้')
+	}
 	for (const [name, source] of [
 		['match', rule.match],
 		['unless', rule.unless],
@@ -41,11 +40,11 @@ export function validateRule(rule: Rule, vars: Vars, knownChecks: ReadonlySet<st
 			errors.push(`ตัวอย่าง hit ไม่โดนกฎ: ${hit}`)
 			continue
 		}
-		if (verdict.kind !== 'rewrite') continue
-		for (const op of OPERATORS) {
-			if (count(verdict.value, op) > count(hit, op))
-				errors.push(`rewrite เพิ่ม "${op}" ที่ไม่มีในคำสั่งเดิม: ${verdict.value}`)
+		if (rule.action === 'rewrite' && verdict.kind === 'deny') {
+			errors.push(`rewrite เพิ่ม operator ที่ไม่มีในคำสั่งเดิม: ${verdict.message}`)
+			continue
 		}
+		if (verdict.kind !== 'rewrite') continue
 		if (judge(rule, verdict.value, vars).kind !== 'pass')
 			errors.push(`rewrite ไม่ idempotent: ${verdict.value} ยังโดนกฎซ้ำ`)
 	}

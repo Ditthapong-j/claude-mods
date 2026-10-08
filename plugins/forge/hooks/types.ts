@@ -11,6 +11,8 @@ export type Rule = {
 	match?: string
 	flags?: string
 	unless?: string
+	// true = ตรวจ match/unless ทีละท่อนของคำสั่งที่ต่อกัน (ใช้กับ deny/warn/check เท่านั้น)
+	segments?: boolean
 	paths?: readonly string[]
 	exceptPaths?: readonly string[]
 	requires?: readonly string[]
