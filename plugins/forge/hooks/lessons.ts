@@ -58,9 +58,12 @@ export function parseDraft(answer: string): { rule: Rule } | { error: string } {
 
 export function tooBroad(rule: Rule, history: readonly string[], vars: Vars): string | undefined {
 	if (!rule.tools.includes('Bash') || rule.field !== 'command') return undefined
-	const caught = history.filter((cmd) =>
-		rule.check === undefined ? judge(rule, cmd, vars).kind !== 'pass' : triggers(rule, cmd)
-	)
+	// คำสั่งที่พลาดจริง (examples.hit) คือสิ่งที่กำลังสอน ไม่นับเป็นคำสั่งที่รันผ่านไปด้วยดี
+	const taught = new Set(rule.examples.hit)
+	const caught = history.filter((cmd) => {
+		if (taught.has(cmd)) return false
+		return rule.check === undefined ? judge(rule, cmd, vars).kind !== 'pass' : triggers(rule, cmd)
+	})
 	if (caught.length === 0) return undefined
 	return `กฎกว้างเกิน: จะดักคำสั่งที่เพิ่งรันผ่านไปด้วยดี ${caught.length} ครั้ง เช่น ${caught.slice(0, 3).join(' · ')}`
 }

@@ -21,6 +21,7 @@ export function world(on: On, w: World): MockClock {
 	const cwd = w.cwd ?? '/repo'
 	const root = w.root === undefined ? '/repo' : w.root
 	const clock = mock.clock(on)
+	mock.store(on)
 	on('session.cwd', () => {
 		if (w.cwdThrows === true) throw new Error('boom')
 		return { value: cwd }

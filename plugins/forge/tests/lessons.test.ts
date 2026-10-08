@@ -47,3 +47,12 @@ describe('tooBroad', () => {
 		expect(tooBroad(narrow.rule, ['git status', 'npm test'], {})).toBeUndefined()
 	})
 })
+
+describe('tooBroad ignores the mistake being taught', () => {
+	test('the command named in examples.hit is not counted as a good command', () => {
+		const out = parseDraft('{"id":"no-bare","tool":"Bash","match":"^git checkout -b \\\\S+$","action":"deny","why":"x","examples":{"hit":["git checkout -b fix/a"],"miss":["git status"]}}')
+		if (!('rule' in out)) throw new Error(out.error)
+		expect(tooBroad(out.rule, ['git checkout -b fix/a', 'git status'], {})).toBeUndefined()
+		expect(tooBroad(out.rule, ['git checkout -b other'], {})).toContain('git checkout -b other')
+	})
+})
