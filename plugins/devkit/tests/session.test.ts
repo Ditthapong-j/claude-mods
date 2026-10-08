@@ -11,6 +11,7 @@ type W = {
 	status?: (string | undefined)[]
 	sounds?: string[]
 	bashHang?: Promise<void>
+	onRead?: (path: string) => string | undefined
 }
 
 const P = { isFullscreen: false, columns: 120 }
@@ -30,13 +31,13 @@ function world(on: On, w: W): MockClock {
 		if (cmd === 'git rev-parse --abbrev-ref HEAD') return ok(0, 'fix/a\n')
 		if (cmd.startsWith('git symbolic-ref')) return ok(0, 'origin/develop\n')
 		if (cmd.startsWith('git rev-list --count')) return ok(0, '3\n')
-		if (cmd === 'git status --porcelain') return ok(0, ' M a\n M b\n')
+		if (cmd === 'git --no-optional-locks status --porcelain') return ok(0, ' M a\n M b\n')
 		if (cmd === 'df -k /') return ok(0, 'Filesystem 1024-blocks Used Available Capacity Mounted on\n/dev/x 1 1 104857600 1% /\n')
 		if (e.argv[0] === 'docker') return ok(0, '')
 		return ok(1, '')
 	})
 	on('fs.exists', ($, e) => ({ value: w.files?.[e.path] !== undefined }))
-	on('fs.read', ($, e) => ({ value: w.files?.[e.path] ?? '' }))
+	on('fs.read', ($, e) => ({ value: w.onRead?.(e.path) ?? w.files?.[e.path] ?? '' }))
 	on('fs.write', ($, e) => {
 		if (w.written !== undefined) w.written[e.path] = e.text
 		if (w.files !== undefined) w.files[e.path] = e.text
@@ -155,7 +156,7 @@ describe('devkit in a session', () => {
 		expect(byModel.text).toContain('ผู้ใช้ต้อง')
 		expect(removed).toEqual([])
 		await $.command.run({ command: 'cleanup', args: 'confirm', origin: { kind: 'composer' }, presentation: P })
-		expect(removed).toEqual(['docker rm -f c1 c2'])
+		expect(removed).toEqual(['docker rm -v c1 c2'])
 	})
 
 	test('long-run-watch warns while a command runs past its threshold', async ($, on) => {
@@ -174,6 +175,132 @@ describe('devkit in a session', () => {
 		const sounds: string[] = []
 		world(on, { sounds })
 		await $.turn.complete(turn(600_000))
+		expect(sounds).toEqual([])
+	})
+})
+
+describe('devkit review fixes', () => {
+	test('prior-work runs ids in parallel with short timeouts and only for the person\'s prompts', async ($, on) => {
+		const calls: { cmd: string; timeoutMs?: number }[] = []
+		const order: string[] = []
+		mock.store(on)
+		on('session.cwd', () => ({ value: '/r' }))
+		on('process.run', async ($, e) => {
+			const cmd = e.argv.join(' ')
+			calls.push({ cmd, timeoutMs: e.init?.timeoutMs })
+			if (cmd.startsWith('gh pr list')) {
+				// ขนานกัน = gh ของทั้งสอง id เริ่มก่อนตัวแรกจบ
+				order.push('start')
+				for (let i = 0; i < 20; i++) await Promise.resolve()
+				order.push('end')
+			}
+			const out = cmd.startsWith('git symbolic-ref') ? 'origin/develop\n' : '[]'
+			return { value: { exitCode: 0, stdout: out, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+		})
+		on('prompt.submit', ($, e) => ({ text: e.text, context: e.context }))
+		await $.prompt.submit({ text: 'OB-1 กับ OB-2', origin: { kind: 'composer' }, wait: false })
+		expect(order).toEqual(['start', 'start', 'end', 'end'])
+		const per = (p: string) => Math.max(...calls.filter((c) => c.cmd.startsWith(p)).map((c) => c.timeoutMs ?? 99_999))
+		expect(per('git symbolic-ref') + per('gh pr list') + per('git log')).toBeLessThanOrEqual(4500)
+		calls.length = 0
+		await $.prompt.submit({ text: 'OB-3', origin: { kind: 'task-notification' } as never, wait: false })
+		expect(calls.filter((c) => c.cmd.startsWith('gh'))).toEqual([])
+	})
+
+	test('long-run-watch tracks parallel commands separately', async ($, on) => {
+		const toasts: string[] = []
+		let releaseA: () => void = () => undefined
+		const hangA = new Promise<void>((r) => (releaseA = r))
+		const clock = mock.clock(on)
+		mock.store(on)
+		on('session.cwd', () => ({ value: '/r' }))
+		on('session.start', ($, e) => ({ cwd: e.cwd }))
+		on('command.register', ($, e) => ({ value: { command: e.name } }))
+		on('process.run', () => ({ value: { exitCode: 1, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
+		on('session.usage', () => ({ value: { startedAt: 0, context: { window: 1 }, rateLimits: [] } }))
+		on('ui.status', () => ({ value: undefined }))
+		on('ui.toast', ($, e) => {
+			toasts.push(e.text)
+			return { value: undefined }
+		})
+		on('tool.call', { tool: 'Bash' }, async ($, e) => {
+			if (e.command.includes('gradlew')) await hangA
+			return { result: { stdout: '', stderr: '', interrupted: false } }
+		})
+		await $.session.start({ cwd: '/r', surface: null, isInteractive: true })
+		const a = $.tool.call({ tool: 'Bash', command: './gradlew assembleRelease', tool_use_id: 'a' } as never)
+		await $.tool.call({ tool: 'Bash', command: 'ls', tool_use_id: 'b' } as never)
+		await clock.advance(11 * 60_000)
+		expect(toasts.some((t) => t.includes('gradlew'))).toBe(true)
+		releaseA()
+		await a
+	})
+
+	test('/cleanup only lists stopped testcontainers and removes their volumes', async ($, on) => {
+		const cmds: string[] = []
+		world(on, {
+			run: (cmd) => {
+				cmds.push(cmd)
+				if (cmd.startsWith('docker ps')) return { code: 0, out: 'c1\n' }
+				if (cmd.startsWith('docker rm')) return { code: 0, out: '' }
+				return undefined
+			},
+		})
+		await $.command.run({ command: 'cleanup', args: 'confirm', origin: { kind: 'composer' }, presentation: P })
+		expect(cmds.find((c) => c.startsWith('docker ps'))).toContain('status=exited')
+		expect(cmds.filter((c) => c.startsWith('docker rm'))).toEqual(['docker rm -v c1'])
+	})
+
+	test('eol-guard keeps an intended LF Write and never overwrites a file changed meanwhile', async ($, on) => {
+		const files: Record<string, string> = { '/r/a.sh': 'x\r\ny\r\n', '/r/b.cs': 'a\r\nb\r\n' }
+		let reads = 0
+		world(on, {
+			files,
+			onRead: (path) => {
+				if (path !== '/r/b.cs') return undefined
+				reads += 1
+				// การอ่านครั้งที่ 3 = ไฟล์ถูกแก้โดยคนอื่นระหว่างที่ eol-guard กำลังจะเขียน
+				return reads >= 3 ? 'other\n' : undefined
+			},
+		})
+		on('tool.call', { tool: 'Write' }, ($, e) => {
+			files[e.file_path] = e.content
+			return { result: { type: 'update', filePath: e.file_path, content: e.content, structuredPatch: [], originalFile: null } } as never
+		})
+		await $.tool.call({ tool: 'Write', file_path: '/r/a.sh', content: 'x\ny\n' })
+		expect(files['/r/a.sh']).toBe('x\ny\n')
+		await $.tool.call({ tool: 'Edit', file_path: '/r/b.cs', old_string: 'b', new_string: 'c' })
+		expect(files['/r/b.cs']).toBe('a\nc\n')
+	})
+
+	test('status uses git without optional locks, skips a detached HEAD, and disk is checked at start', async ($, on) => {
+		const cmds: string[] = []
+		const toasts: string[] = []
+		let branch = 'fix/a'
+		const clock = world(on, {
+			toasts,
+			run: (cmd) => {
+				cmds.push(cmd)
+				if (cmd === 'git rev-parse --abbrev-ref HEAD') return { code: 0, out: `${branch}\n` }
+				if (cmd === 'git --no-optional-locks status --porcelain') return { code: 0, out: '' }
+				return undefined
+			},
+		})
+		await $.session.start({ cwd: '/r', surface: null, isInteractive: true })
+		expect(cmds).toContain('git --no-optional-locks status --porcelain')
+		expect(cmds).not.toContain('git status --porcelain')
+		expect(cmds.some((c) => c.startsWith('df -k'))).toBe(true)
+		branch = 'HEAD'
+		await clock.advance(30_000)
+		branch = 'fix/a'
+		await clock.advance(30_000)
+		expect(toasts.filter((t) => t.includes('branch'))).toEqual([])
+	})
+
+	test('turn-done-sound stays quiet for an interrupted turn', async ($, on) => {
+		const sounds: string[] = []
+		world(on, { sounds })
+		await $.turn.complete({ ...turn(600_000), isAborted: true })
 		expect(sounds).toEqual([])
 	})
 })

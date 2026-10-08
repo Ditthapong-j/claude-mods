@@ -2,9 +2,13 @@
 
 const MAX_IDS = 3
 
+// คำที่หน้าตาเหมือนเลข ticket แต่เป็นชื่อมาตรฐาน (UTF-8, SHA-256, ...)
+const NOT_TICKET = /^(?:UTF|SHA|ISO|ES|HTTP|TLS|SSL|RFC|IPV|MD|AES|RSA|CVE|X|H|P|U|PR)-/
+
 export function issueIds(text: string): string[] {
-	const found = text.match(/\b[A-Z][A-Z0-9]+-\d+\b|(?<![\w&])#\d+\b/g) ?? []
-	return [...new Set(found)].slice(0, MAX_IDS)
+	// #123 ที่ตามหลัง ":" หรือตามด้วย ";" คือสีใน CSS ไม่ใช่เลข PR
+	const found = text.match(/\b[A-Z][A-Z0-9]+-\d+\b|(?<![\w&]|:\s*)#\d+\b(?!;)/g) ?? []
+	return [...new Set(found.filter((id) => !NOT_TICKET.test(id)))].slice(0, MAX_IDS)
 }
 
 export function priorContext(

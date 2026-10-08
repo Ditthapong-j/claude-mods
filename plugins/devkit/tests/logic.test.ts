@@ -42,6 +42,7 @@ describe('prior', () => {
 	test('issue ids from a prompt', () => {
 		expect(issueIds('แก้ OB-123 กับ #45 ด้วย และ OB-123 อีกที')).toEqual(['OB-123', '#45'])
 		expect(issueIds('ไม่มีเลข')).toEqual([])
+		expect(issueIds('UTF-8 SHA-256 ISO-8601 HTTP-2 color: #333; RFC-7231')).toEqual([])
 		expect(issueIds('OB-1 OB-2 OB-3 OB-4')).toHaveLength(3)
 	})
 	test('context lists open PRs and commits, or nothing', () => {
@@ -59,7 +60,9 @@ describe('prior', () => {
 describe('longrun', () => {
 	test('command key is the first two words of the first segment', () => {
 		expect(commandKey('npx vitest run src')).toBe('npx vitest')
-		expect(commandKey('cd apps/web && npm test')).toBe('cd apps/web')
+		expect(commandKey('cd /r/backend && dotnet test')).toBe('dotnet test')
+		expect(commandKey('FOO=1 npm test')).toBe('npm test')
+		expect(commandKey('cd /r')).toBe('cd /r')
 	})
 	test('known slow commands and thresholds', () => {
 		expect(isKnownSlow('./gradlew assembleRelease')).toBe(true)
@@ -69,6 +72,7 @@ describe('longrun', () => {
 		expect(thresholdMs(undefined, true)).toBe(10 * 60_000)
 		expect(thresholdMs(10_000, false)).toBe(60_000)
 		expect(thresholdMs(200_000, false)).toBe(400_000)
+		expect(thresholdMs(10_000, true)).toBe(10 * 60_000)
 	})
 	test('running average', () => {
 		expect(nextAvg(undefined, 100)).toEqual({ avg: 100, n: 1 })
