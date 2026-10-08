@@ -14,7 +14,9 @@ test('import-memory drafts one rule per usable feedback file and skips the rest'
 			'/m/feedback_c.md': '',
 		},
 	})
-	on('fs.list', () => ({ value: ['feedback_a.md', 'feedback_b.md', 'feedback_c.md', 'project_x.md'] }))
+	on('fs.list', () => ({
+		value: ['feedback_a.md', 'feedback_b.md', 'feedback_c.md', 'project_x.md'].map((name) => ({ name, kind: 'file' as const, size: 1, mtimeMs: 0, isLink: false })),
+	}))
 	on('model.complete', ($, e) => {
 		const prompt = String((e as unknown as Record<string, unknown>)['prompt'])
 		const text = prompt.includes('feedback_a.md')

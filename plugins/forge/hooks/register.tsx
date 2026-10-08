@@ -155,10 +155,9 @@ async function importMemory($: EngineInterface, dir: string | undefined): Promis
 	if (!(await $.fs.exists(target))) {
 		return `ไม่พบโฟลเดอร์ memory: ${target} (ระบุเองด้วย /lessons import-memory <dir>)`
 	}
-	const listed = (await $.fs.list(target)) as readonly unknown[]
-	const names = listed
-		.map((x) => (typeof x === 'string' ? x : String((x as { name?: unknown }).name ?? '')))
-		.filter((n) => /^feedback.*\.md$/.test(n))
+	const names = (await $.fs.list(target))
+		.filter((entry) => entry.kind === 'file' && /^feedback.*\.md$/.test(entry.name))
+		.map((entry) => entry.name)
 	const repo = await loadRepo($)
 	const drafts: DraftState[] = []
 	const skipped: string[] = []
