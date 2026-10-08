@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'claude-code/testing'
 
 import { advance, evaluate, MAX_ATTEMPTS, startShip, stepPrompt } from '../hooks/steps'
+import type { Ship } from '../hooks/steps'
 
 describe('ship state machine', () => {
 	test('starts at understand and its prompt names the issue and the duplicate check', () => {
@@ -31,11 +32,11 @@ describe('ship state machine', () => {
 		expect(evaluate({ ...s, step: 'review' }, { review: { blocking: 2 } })).toBe('retry')
 	})
 	test('advance stops at the PR gate and blocks after too many retries', () => {
-		let s = { ...startShip('x', 'origin/develop', 'code-review'), step: 'review' as const }
+		let s: Ship = { ...startShip('x', 'origin/develop', 'code-review'), step: 'review' as const }
 		s = advance(s, 'pass')
 		expect(s.step).toBe('open-pr')
 		expect(s.status).toBe('waiting-person')
-		let r = { ...startShip('x', 'origin/develop', 'code-review'), step: 'proof' as const }
+		let r: Ship = { ...startShip('x', 'origin/develop', 'code-review'), step: 'proof' as const }
 		for (let i = 0; i < MAX_ATTEMPTS; i++) r = advance(r, 'retry')
 		expect(r.status).toBe('blocked')
 		expect(r.log.at(-1)).toContain('proof')
