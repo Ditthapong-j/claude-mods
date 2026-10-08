@@ -1,0 +1,15 @@
+{
+	"name": "proof",
+	"version": "0.1.0",
+	"description": "รันเทสต์และ typecheck ที่เกี่ยวข้องเบื้องหลังหลังแก้ไฟล์ และเตือนเมื่อปิดงานทั้งที่ยังแดง",
+	"author": { "name": "Ditthapong-j" },
+	"types": "./types/index.d.ts",
+	"userConfig": {
+		"autoRun": {
+			"type": "boolean",
+			"title": "รันอัตโนมัติหลังแก้ไฟล์",
+			"description": "ปิด = รันเฉพาะเมื่อพิมพ์ /proof run",
+			"default": true
+		}
+	}
+}

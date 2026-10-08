@@ -8,6 +8,11 @@
 			"name": "forge",
 			"source": "./plugins/forge",
 			"description": "บังคับกฎของ repo และบทเรียนที่เคยพลาด ก่อนคำสั่งจะรัน"
+		},
+		{
+			"name": "proof",
+			"source": "./plugins/proof",
+			"description": "Proof Gate: หลักฐานเทสต์บนจอ และเตือนเมื่อปิดงานทั้งที่ยังแดง"
 		}
 	],
 	"description": "ชุด mod ส่วนตัวสำหรับ Claude Code"
