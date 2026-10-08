@@ -1,0 +1,65 @@
+{
+	"name": "devkit",
+	"version": "0.1.0",
+	"description": "mod เล็ก 7 ตัว: eol-guard, branch-watch, prior-work, long-run-watch, disk-band, usage-meter, turn-done-sound",
+	"author": {
+		"name": "Ditthapong-j"
+	},
+	"types": "./types/index.d.ts",
+	"userConfig": {
+		"eolGuard": {
+			"type": "boolean",
+			"title": "eol-guard",
+			"description": "คืน CRLF ให้ไฟล์ที่เป็น CRLF ล้วนหลัง Claude แก้",
+			"default": true
+		},
+		"branchWatch": {
+			"type": "boolean",
+			"title": "branch-watch",
+			"description": "status line บอก branch และเตือนเมื่อ branch ถูกสลับจากที่อื่น",
+			"default": true
+		},
+		"priorWork": {
+			"type": "boolean",
+			"title": "prior-work",
+			"description": "แนบ PR และ commit ที่เกี่ยวกับเลข issue ใน prompt",
+			"default": true
+		},
+		"longRunWatch": {
+			"type": "boolean",
+			"title": "long-run-watch",
+			"description": "เตือนเมื่อคำสั่งรันนานผิดปกติ",
+			"default": true
+		},
+		"diskBand": {
+			"type": "boolean",
+			"title": "disk-band",
+			"description": "เตือนเมื่อดิสก์ใกล้เต็มหรือ container ของ testcontainers ค้าง",
+			"default": true
+		},
+		"usageMeter": {
+			"type": "boolean",
+			"title": "usage-meter",
+			"description": "แสดง % context ใน status line",
+			"default": true
+		},
+		"turnDoneSound": {
+			"type": "boolean",
+			"title": "turn-done-sound",
+			"description": "เล่นเสียงเมื่อเทิร์นยาวจบ",
+			"default": true
+		},
+		"diskMinFreeGb": {
+			"type": "number",
+			"title": "เตือนเมื่อพื้นที่ว่างต่ำกว่า (GB)",
+			"description": "ค่าเริ่มต้น 15",
+			"default": 15
+		},
+		"turnSoundSeconds": {
+			"type": "number",
+			"title": "เล่นเสียงเมื่อเทิร์นนานเกิน (วินาที)",
+			"description": "ค่าเริ่มต้น 120",
+			"default": 120
+		}
+	}
+}

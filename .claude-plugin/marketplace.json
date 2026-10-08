@@ -28,6 +28,11 @@
 			"name": "autopilot",
 			"source": "./plugins/autopilot",
 			"description": "Autopilot: /ship เดินงานจาก issue ถึง PR โดยหยุดที่จุดอนุมัติ"
+		},
+		{
+			"name": "devkit",
+			"source": "./plugins/devkit",
+			"description": "mod เล็กที่ใช้ได้ทุก project: eol-guard, branch-watch, prior-work, long-run-watch, disk-band, usage-meter, turn-done-sound"
 		}
 	],
 	"description": "ชุด mod ส่วนตัวสำหรับ Claude Code"
