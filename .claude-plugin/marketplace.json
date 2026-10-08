@@ -13,6 +13,11 @@
 			"name": "proof",
 			"source": "./plugins/proof",
 			"description": "Proof Gate: หลักฐานเทสต์บนจอ และเตือนเมื่อปิดงานทั้งที่ยังแดง"
+		},
+		{
+			"name": "mission",
+			"source": "./plugins/mission",
+			"description": "Mission Control: งาน, PR, CI และ env ในจอเดียว"
 		}
 	],
 	"description": "ชุด mod ส่วนตัวสำหรับ Claude Code"

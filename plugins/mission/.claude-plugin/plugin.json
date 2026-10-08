@@ -1,0 +1,23 @@
+{
+	"name": "mission",
+	"version": "0.1.0",
+	"description": "Mission Control: worktree, PR + CI, session อื่น และ version ของแต่ละ env ในจอเดียว",
+	"author": {
+		"name": "Ditthapong-j"
+	},
+	"types": "./types/index.d.ts",
+	"userConfig": {
+		"envs": {
+			"type": "string",
+			"title": "Environments (JSON)",
+			"description": "[{\"name\":\"PROD\",\"url\":\"https://api.example.com/api/v1/version\"}]",
+			"default": "[]"
+		},
+		"refreshSeconds": {
+			"type": "number",
+			"title": "อัปเดตทุกกี่วินาที",
+			"default": 120,
+			"description": "อย่างน้อย 30 วินาที"
+		}
+	}
+}
