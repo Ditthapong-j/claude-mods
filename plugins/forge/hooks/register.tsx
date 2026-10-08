@@ -146,9 +146,12 @@ async function showNextDraft($: EngineInterface): Promise<void> {
 }
 
 async function importMemory($: EngineInterface, dir: string | undefined): Promise<string> {
-	const home = await $.env.get('HOME')
-	const cwd = await $.session.cwd()
-	const target = dir ?? `${home ?? ''}/.claude/projects/${cwd.replace(/[/.]/g, '-')}/memory`
+	let target = dir
+	if (target === undefined) {
+		const home = await $.env.get('HOME')
+		const cwd = await $.session.cwd()
+		target = `${home ?? ''}/.claude/projects/${cwd.replace(/[/.]/g, '-')}/memory`
+	}
 	if (!(await $.fs.exists(target))) {
 		return `ไม่พบโฟลเดอร์ memory: ${target} (ระบุเองด้วย /lessons import-memory <dir>)`
 	}
