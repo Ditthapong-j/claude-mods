@@ -1,6 +1,7 @@
 {
 	"name": "mission",
 	"version": "0.1.0",
+	"license": "MIT",
 	"description": "Mission Control: worktree, PR + CI, session อื่น และ version ของแต่ละ env ในจอเดียว",
 	"author": {
 		"name": "Ditthapong-j"

@@ -1,6 +1,7 @@
 {
 	"name": "autopilot",
 	"version": "0.1.0",
+	"license": "MIT",
 	"description": "Autopilot: /ship เดินงานจาก issue ถึง PR โดยหยุดที่จุดอนุมัติ",
 	"author": {
 		"name": "Ditthapong-j"

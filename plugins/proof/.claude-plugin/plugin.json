@@ -1,6 +1,7 @@
 {
 	"name": "proof",
 	"version": "0.1.0",
+	"license": "MIT",
 	"description": "รันเทสต์และ typecheck ที่เกี่ยวข้องเบื้องหลังหลังแก้ไฟล์ และเตือนเมื่อปิดงานทั้งที่ยังแดง",
 	"author": { "name": "Ditthapong-j" },
 	"types": "./types/index.d.ts",

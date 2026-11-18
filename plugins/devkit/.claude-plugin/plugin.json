@@ -1,6 +1,7 @@
 {
 	"name": "devkit",
 	"version": "0.1.0",
+	"license": "MIT",
 	"description": "mod เล็ก 7 ตัว: eol-guard, branch-watch, prior-work, long-run-watch, disk-band, usage-meter, turn-done-sound",
 	"author": {
 		"name": "Ditthapong-j"

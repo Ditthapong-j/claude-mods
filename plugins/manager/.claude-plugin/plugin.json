@@ -1,6 +1,7 @@
 {
 	"name": "manager",
 	"version": "0.1.0",
+	"license": "MIT",
 	"description": "Mod Manager: /mods ดู plugin, กฎ และ error ในจอเดียว",
 	"author": { "name": "Ditthapong-j" },
 	"types": "./types/index.d.ts"

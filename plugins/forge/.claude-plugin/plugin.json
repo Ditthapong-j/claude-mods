@@ -1,6 +1,7 @@
 {
 	"name": "forge",
 	"version": "0.1.0",
+	"license": "MIT",
 	"description": "บังคับกฎของ repo และบทเรียนที่เคยพลาด ก่อนคำสั่งจะรัน",
 	"author": {
 		"name": "Ditthapong-j"
