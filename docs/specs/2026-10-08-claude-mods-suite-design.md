@@ -270,6 +270,6 @@ plugin เดียว เปิด/ปิดแต่ละตัวด้ว�
 
 ## 13. คำตอบจากการรีวิว (2026-10-08)
 
-1. repo `Ditthapong-j/claude-mods` เป็น **private**
+1. repo `Ditthapong-j/claude-mods` เป็น **public** (เดิมเป็น private · เปิด 2026-11-18 ให้คนอื่นติดตั้งผ่าน `claude plugin marketplace add` ได้โดยไม่ต้องขอสิทธิ์)
 2. repo ที่ไม่มี guards.json ใช้ reviewer `code-review` ทั่วไปในขั้น 6 ของ autopilot
 3. รับได้ที่จะ classify ด้วยโมเดลเล็กทุกข้อความที่ยาวพอ (ผ่าน subscription ของ Claude Code) โดยยังคงเงื่อนไขข้ามใน §4.3 และเพดาน latency ใน S4
