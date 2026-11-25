@@ -3,6 +3,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { DraftState, ErrorRecord, HitRecord, RecentCallState } from '../types'
 import { BUILTIN_RULES } from './builtin'
+import { draftCard } from './card'
 import { CHECK_NAMES, validateCheckParams } from './checks/index'
 import { isVerdict } from './checks/types'
 import type { Probe, ProbeResult } from './checks/types'
@@ -195,7 +196,8 @@ async function importMemory($: EngineInterface, dir: string | undefined): Promis
 			skipped.push(`${name}: ไฟล์ว่าง`)
 			continue
 		}
-		const answer = await $.model.complete({ model: 'haiku',
+		const answer = await $.model.complete({
+			model: 'haiku',
 			prompt: draftPrompt(text.slice(0, 4000), [{ tool: 'memory', summary: name }]),
 		})
 		if (!answer.isAnswered) {
@@ -457,14 +459,26 @@ export const register: Register = (on, options) => {
 		if (rule === undefined) return next(e)
 		const { Box, Button, Text } = $.ui.resolve(e)
 		const act = (a: LessonsAction) => () => applyLessons($, a)
+		// โชว์ผลกับตัวอย่างคำสั่งจริง ไม่โชว์ regex (ผู้ใช้อ่าน regex ไม่ออก)
+		const card = draftCard(rule, draft.lesson, (await loadRepo($)).vars)
 		return (
 			<Box flexDirection="column" borderStyle="round" borderColor="warning" paddingX={1}>
-				<Text bold>forge เจอบทเรียนใหม่: {rule.id}</Text>
+				<Text bold>{card.title}</Text>
+				<Text wrap="wrap">{card.why}</Text>
+				<Text wrap="wrap">{card.effect}</Text>
+				{card.examples.map((x) => (
+					<Box key={x.label} gap={1}>
+						<Text dimColor>{x.label}:</Text>
+						<Text wrap="wrap">{x.text}</Text>
+					</Box>
+				))}
+				{card.hint !== undefined && (
+					<Text dimColor wrap="wrap">
+						{card.hint}
+					</Text>
+				)}
 				<Text dimColor wrap="wrap">
-					“{draft.lesson.slice(0, 160)}”
-				</Text>
-				<Text wrap="wrap">
-					{rule.action} · {rule.match ?? rule.check ?? ''} · {rule.why}
+					{card.source}
 				</Text>
 				<Box gap={1}>
 					<Button
@@ -474,7 +488,11 @@ export const register: Register = (on, options) => {
 						onPress={act({ kind: 'accept', scope: 'any-repo', id: rule.id })}
 					/>
 					<Button key="repo" label="เฉพาะ repo นี้" onPress={act({ kind: 'accept', scope: 'repo', id: rule.id })} />
-					<Button key="file" label="เขียนลง guards.json" onPress={act({ kind: 'accept', scope: 'file', id: rule.id })} />
+					<Button
+						key="file"
+						label="เขียนลง guards.json"
+						onPress={act({ kind: 'accept', scope: 'file', id: rule.id })}
+					/>
 					<Button
 						key="edit"
 						label="แก้ก่อน"
