@@ -1,7 +1,7 @@
 import type { HitRecord } from '../types'
 import { CHECKS } from './checks/index'
 import type { Step } from './checks/types'
-import { applies, judge, PASS, triggers } from './match'
+import { applies, fieldValue, judge, PASS, triggers } from './match'
 import type { Rule, ToolInput, Vars, Verdict } from './types'
 
 export type Outcome = {
@@ -33,7 +33,7 @@ export function newOutcome(input: ToolInput): Outcome {
 // null = กฎนี้ไม่เกี่ยวกับการเรียกนี้
 export function startRule(rule: Rule, tool: string, input: ToolInput, vars: Vars): Step | null {
 	if (!applies(rule, tool, input, vars)) return null
-	const value = input[rule.field]
+	const value = fieldValue(rule.field, input)
 	if (typeof value !== 'string') return null
 	if (rule.check === undefined) return judge(rule, value, vars)
 	if (!triggers(rule, value)) return PASS

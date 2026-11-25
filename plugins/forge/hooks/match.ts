@@ -34,8 +34,27 @@ function relative(filePath: string, root: string | undefined): string {
 	return root !== undefined && filePath.startsWith(`${root}/`) ? filePath.slice(root.length + 1) : filePath
 }
 
+// ชื่อ tool ใส่ * ได้ เช่น mcp__acme-write__* (ตัวอื่นเทียบตรงตัว)
+export function toolMatches(patterns: readonly string[], tool: string): boolean {
+	return patterns.some((p) =>
+		p.includes('*')
+			? new RegExp(
+					`^${p
+						.split('*')
+						.map((s) => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
+						.join('.*')}$`
+				).test(tool)
+			: p === tool
+	)
+}
+
+// field "*" = ตรวจทั้ง input ของ tool เป็น JSON (ใช้กับ MCP tool ที่ไม่มี field กลาง)
+export function fieldValue(field: string, input: ToolInput): unknown {
+	return field === '*' ? JSON.stringify(input) : input[field]
+}
+
 export function applies(rule: Rule, tool: string, input: ToolInput, vars: Vars): boolean {
-	if (!rule.enabled || !rule.tools.includes(tool)) return false
+	if (!rule.enabled || !toolMatches(rule.tools, tool)) return false
 	if (rule.requires?.some((key) => vars[key] === undefined)) return false
 	if (rule.paths === undefined && rule.exceptPaths === undefined) return true
 	const filePath = input['file_path']
