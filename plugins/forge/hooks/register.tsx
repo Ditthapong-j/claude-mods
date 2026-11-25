@@ -44,6 +44,26 @@ const PROBE_TIMEOUT_MS = 5000
 const READ_ONLY = new Set(['Read', 'Grep', 'Glob', 'LS', 'WebSearch', 'WebFetch', 'TodoWrite'])
 
 const rootByCwd = new Map<string, string | null>()
+const homeByRoot = new Map<string, string>()
+
+// repo หลักจาก git-common-dir: worktree ได้ path ของ checkout หลัก · ถามไม่ได้ = ใช้ root เดิม
+async function repoHome($: EngineInterface, root: string): Promise<string> {
+	const known = homeByRoot.get(root)
+	if (known !== undefined) return known
+	let home = root
+	try {
+		const res = await $.process.run(['git', 'rev-parse', '--path-format=absolute', '--git-common-dir'], {
+			cwd: root,
+			timeoutMs: PROBE_TIMEOUT_MS,
+		})
+		const dir = res.stdout.trim()
+		if (res.exitCode === 0 && dir.endsWith('/.git')) home = dir.slice(0, -'/.git'.length)
+	} catch {
+		// git ตอบไม่ได้: ผูกกับ root ของ worktree เหมือนเดิม กฎที่ผูกไว้ยังเจอผ่าน worktreeHome
+	}
+	homeByRoot.set(root, home)
+	return home
+}
 
 // dir = folder ที่คำสั่งจะทำงานจริง (จาก cd / git -C) · ไม่ใส่ = cwd ของ session
 async function loadRepo($: EngineInterface, dir?: string): Promise<RepoConfig> {
@@ -60,11 +80,12 @@ async function loadRepo($: EngineInterface, dir?: string): Promise<RepoConfig> {
 		}
 		rootByCwd.set(cwd, root)
 	}
-	if (root === null) return { root: null, vars: {}, rules: [], errors: [] }
+	if (root === null) return { root: null, home: null, vars: {}, rules: [], errors: [] }
+	const home = await repoHome($, root)
 	const path = `${root}/${GUARDS_FILE}`
-	if (!(await $.fs.exists(path))) return { root, vars: { repoRoot: root }, rules: [], errors: [] }
+	if (!(await $.fs.exists(path))) return { root, home, vars: { repoRoot: root }, rules: [], errors: [] }
 	const text = await $.fs.read(path)
-	return parseGuardsText(typeof text === 'string' ? text : null, root, CHECK_NAMES, validateCheckParams)
+	return { ...parseGuardsText(typeof text === 'string' ? text : null, root, CHECK_NAMES, validateCheckParams), home }
 }
 
 async function probe($: EngineInterface, p: Probe): Promise<ProbeResult> {
@@ -132,7 +153,7 @@ async function allRules(
 	dir?: string
 ): Promise<{ repo: RepoConfig; personalRepo: Rule[]; personal: Rule[]; merged: Rule[] }> {
 	const repo = await loadRepo($, dir)
-	const mine = personalFor(await personalRules($), repo.root)
+	const mine = personalFor(await personalRules($), repo.home ?? repo.root)
 	return {
 		repo,
 		personalRepo: mine.repo,
@@ -257,7 +278,7 @@ async function applyLessons($: EngineInterface, action: LessonsAction): Promise<
 			if (action.scope === 'repo' && repo.root === null) return 'ไม่ได้อยู่ใน git repo จึงผูกกับ repo ไม่ได้'
 			const scope =
 				action.scope === 'repo' && repo.root !== null
-					? { kind: 'repo' as const, root: repo.root }
+					? { kind: 'repo' as const, root: repo.home ?? repo.root }
 					: { kind: 'any-repo' as const }
 			const item: PersonalRule = { rule, scope, createdAt: await $.clock.now(), lesson: draft.lesson }
 			await $.store.set('personalRules', upsert(await personalRules($), item))

@@ -4,9 +4,18 @@ export type Scope = { kind: 'any-repo' } | { kind: 'repo'; root: string }
 
 export type PersonalRule = { rule: Rule; scope: Scope; createdAt: number; lesson: string }
 
-export function personalFor(list: readonly PersonalRule[], root: string | null): { repo: Rule[]; any: Rule[] } {
+// repo หลักของ worktree ตามแบบตั้งชื่อที่ใช้กัน (.claude/worktrees/<ชื่อ>, .worktrees/<ชื่อ>)
+// ใช้กับกฎเก่าที่เคยผูกกับ path ของ worktree ซึ่งอาจถูกลบไปแล้ว จึงถาม git ไม่ได้
+export function worktreeHome(path: string): string {
+	return path.replace(/\/(?:\.claude\/worktrees|\.worktrees)\/[^/]+\/?$/, '')
+}
+
+// home = repo หลัก (worktree ทุกอันของ repo เดียวกันได้ค่าเดียวกัน)
+export function personalFor(list: readonly PersonalRule[], home: string | null): { repo: Rule[]; any: Rule[] } {
+	const mine = (p: PersonalRule): boolean =>
+		home !== null && p.scope.kind === 'repo' && (p.scope.root === home || worktreeHome(p.scope.root) === home)
 	return {
-		repo: list.filter((p) => p.scope.kind === 'repo' && p.scope.root === root).map((p) => p.rule),
+		repo: list.filter(mine).map((p) => p.rule),
 		any: list.filter((p) => p.scope.kind === 'any-repo').map((p) => p.rule),
 	}
 }

@@ -34,6 +34,8 @@ export type Verdict =
 
 export type RepoConfig = {
 	root: string | null
+	// repo หลัก: worktree ทุกอันของ repo เดียวกันได้ค่าเดียวกัน (ใช้ผูกกฎ "เฉพาะ repo นี้")
+	home?: string | null
 	vars: Vars
 	rules: readonly Rule[]
 	errors: readonly string[]
