@@ -16,6 +16,7 @@ import type { PersonalRule } from './personal'
 import { parseLessonsArgs, ruleRows } from './rules-view'
 import type { LessonsAction, RuleRow } from './rules-view'
 import { validateRule } from './safety'
+import { commandDir, needsHome } from './target'
 import type { RepoConfig, Rule, ToolInput, Vars } from './types'
 
 // ทุกการเรียก $ อยู่ในไฟล์นี้: engine ไม่ยอมให้ส่ง $ เข้าฟังก์ชันที่ import มา
@@ -43,8 +44,9 @@ const READ_ONLY = new Set(['Read', 'Grep', 'Glob', 'LS', 'WebSearch', 'WebFetch'
 
 const rootByCwd = new Map<string, string | null>()
 
-async function loadRepo($: EngineInterface): Promise<RepoConfig> {
-	const cwd = await $.session.cwd()
+// dir = folder ที่คำสั่งจะทำงานจริง (จาก cd / git -C) · ไม่ใส่ = cwd ของ session
+async function loadRepo($: EngineInterface, dir?: string): Promise<RepoConfig> {
+	const cwd = dir ?? (await $.session.cwd())
 	let root = rootByCwd.get(cwd)
 	if (root === undefined) {
 		try {
@@ -98,6 +100,21 @@ async function recordError($: EngineInterface, where: string, err: unknown): Pro
 	await update($, errorsAtom, (list) => [...list, { at, where, message }].slice(-50))
 }
 
+// คำสั่ง Bash ที่ cd / git -C ไป repo อื่น ต้องใช้กฎ (และ baseBranch) ของ repo นั้น
+async function targetDir($: EngineInterface, input: ToolInput): Promise<string | undefined> {
+	const command = input['command']
+	if (input['tool'] !== 'Bash' || typeof command !== 'string') return undefined
+	let home: string | undefined
+	if (needsHome(command)) {
+		try {
+			home = (await $.env.get('HOME')) ?? undefined
+		} catch {
+			home = undefined
+		}
+	}
+	return commandDir(command, await $.session.cwd(), home)
+}
+
 async function personalRules($: EngineInterface): Promise<PersonalRule[]> {
 	const raw = await $.store.get('personalRules')
 	return Array.isArray(raw) ? (raw as PersonalRule[]) : []
@@ -110,9 +127,10 @@ async function hitlog($: EngineInterface): Promise<{ ruleId: string; at: number 
 
 // ลำดับความสำคัญ: กฎของ repo > กฎส่วนตัวที่ผูกกับ repo > กฎส่วนตัวทุก repo > กฎในตัว
 async function allRules(
-	$: EngineInterface
+	$: EngineInterface,
+	dir?: string
 ): Promise<{ repo: RepoConfig; personalRepo: Rule[]; personal: Rule[]; merged: Rule[] }> {
-	const repo = await loadRepo($)
+	const repo = await loadRepo($, dir)
 	const mine = personalFor(await personalRules($), repo.root)
 	return {
 		repo,
@@ -329,7 +347,7 @@ export const register: Register = (on, options) => {
 	})
 
 	on('tool.call', async ($, e, next) => {
-		const all = await allRules($)
+		const all = await allRules($, await targetDir($, e as unknown as ToolInput))
 		const repo = all.repo
 		if (repo.errors.length > 0) await warnConfigOnce($, repo.errors)
 		const rules = all.merged
